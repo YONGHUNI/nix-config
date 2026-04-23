@@ -1,19 +1,7 @@
 { config, lib, pkgs, ... }:
 
 {
-  wsl.enable = true;
-  wsl.defaultUser = "yhsuh";
-
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
-
-  # Use OpenSSH with Kerberos/GSSAPI support
-  programs.ssh.package = pkgs.opensshWithKerberos;
-
-  # Shell aliases
-  programs.bash.shellAliases = {
-    nrs = "sudo nixos-rebuild switch --flake ~/nix-config#nixos";
-    nrt = "sudo nixos-rebuild test --flake ~/nix-config#nixos";
-  };
 
   # System packages
   environment.systemPackages = with pkgs; [
@@ -51,6 +39,4 @@
       };
     };
   };
-
-  system.stateVersion = "25.11";
 }

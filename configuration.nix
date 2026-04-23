@@ -5,6 +5,11 @@
   wsl.defaultUser = "yhsuh";
 
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.auto-optimise-store = true;
+  nix.gc = {
+    automatic = true;
+    options = "--delete-older-than 7d";
+  };
 
   # Use OpenSSH with Kerberos/GSSAPI support
   programs.ssh.package = pkgs.opensshWithKerberos;

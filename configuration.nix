@@ -22,8 +22,29 @@
 
   # System packages
   environment.systemPackages = with pkgs; [
+    # Core
+    vim
+    tmux
     git
     gh
+    htop
+    tree
+    jq
+    wget
+    unzip
+
+    # Python
+    python3
+    pyright
+    black
+
+    # YAML
+    yaml-language-server
+
+    # Nix
+    nil
+    statix
+    nixpkgs-fmt
   ];
 
   # Kerberos for MPCDF GSSAPI authentication

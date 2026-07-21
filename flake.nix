@@ -18,8 +18,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nix-flatpak.url = "github:gmodena/nix-flatpak"; 
- };
+    plasma-manager = {
+      url = "github:nix-community/plasma-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
+
+    nix-flatpak.url = "github:gmodena/nix-flatpak";
+  };
 
   outputs =
     {
@@ -27,6 +33,7 @@
       nixpkgs-wsl,
       nixos-wsl,
       home-manager,
+      plasma-manager,
       nix-flatpak,
       ...
     }:
@@ -58,8 +65,12 @@
               # Preserve manually created files instead of failing.
               home-manager.backupFileExtension = "hm-backup";
 
-              home-manager.users.yonghun =
-                import ./home/yonghun.nix;
+              home-manager.users.yonghun = {
+                imports = [
+                  plasma-manager.homeModules.plasma-manager
+                  ./home/yonghun.nix
+                ];
+              };
             }
 
             nix-flatpak.nixosModules.nix-flatpak

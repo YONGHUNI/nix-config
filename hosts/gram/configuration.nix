@@ -5,10 +5,10 @@
 { config, pkgs, ... }:
 
 {
-  imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
-    ];
+  imports = [
+    # Include the results of the hardware scan.
+    ./hardware-configuration.nix
+  ];
 
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
@@ -16,12 +16,12 @@
 
   boot.initrd.systemd.enable = true;
 
-  boot.initrd.luks.devices."luks-502dd682-dcf9-4c70-afb1-1846fb3419ff".device = "/dev/disk/by-uuid/502dd682-dcf9-4c70-afb1-1846fb3419ff";
+  boot.initrd.luks.devices."luks-502dd682-dcf9-4c70-afb1-1846fb3419ff".device =
+    "/dev/disk/by-uuid/502dd682-dcf9-4c70-afb1-1846fb3419ff";
 
   boot.initrd.luks.devices."luks-502dd682-dcf9-4c70-afb1-1846fb3419ff".crypttabExtraOpts = [
     "tpm2-device=auto"
   ];
-
 
   boot.initrd.luks.devices."luks-eb0f59b8-f70c-4ee3-991b-4dc7f4ca0256".crypttabExtraOpts = [
     "tpm2-device=auto"
@@ -48,25 +48,23 @@
       addons = with pkgs; [
         fcitx5-hangul
       ];
-        waylandFrontend = true;
+      waylandFrontend = true;
     };
   };
   # Select internationalisation properties.
   i18n.defaultLocale = "en_US.UTF-8";
 
-#   i18n.extraLocaleSettings = {
-#    LC_ADDRESS = "ko_KR.UTF-8";
-#    LC_IDENTIFICATION = "ko_KR.UTF-8";
-#    LC_MEASUREMENT = "ko_KR.UTF-8";
-#    LC_MONETARY = "ko_KR.UTF-8";
-#    LC_NAME = "ko_KR.UTF-8";
-#    LC_NUMERIC = "ko_KR.UTF-8";
-#    LC_PAPER = "ko_KR.UTF-8";
-#    LC_TELEPHONE = "ko_KR.UTF-8";
-#    LC_TIME = "ko_KR.UTF-8";
-#  };
-
-
+  #   i18n.extraLocaleSettings = {
+  #    LC_ADDRESS = "ko_KR.UTF-8";
+  #    LC_IDENTIFICATION = "ko_KR.UTF-8";
+  #    LC_MEASUREMENT = "ko_KR.UTF-8";
+  #    LC_MONETARY = "ko_KR.UTF-8";
+  #    LC_NAME = "ko_KR.UTF-8";
+  #    LC_NUMERIC = "ko_KR.UTF-8";
+  #    LC_PAPER = "ko_KR.UTF-8";
+  #    LC_TELEPHONE = "ko_KR.UTF-8";
+  #    LC_TIME = "ko_KR.UTF-8";
+  #  };
 
   i18n.extraLocaleSettings = {
     LC_ADDRESS = "en_US.UTF-8";
@@ -121,10 +119,13 @@
   users.users."yonghun" = {
     isNormalUser = true;
     description = "Yonghun Suh";
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [
+      "networkmanager"
+      "wheel"
+    ];
     packages = with pkgs; [
       kdePackages.kate
-    #  thunderbird
+      #  thunderbird
     ];
   };
 
@@ -145,6 +146,7 @@
     git
     htop
     fastfetch
+
   ];
 
   # Some programs need SUID wrappers, can be configured further or are
@@ -159,6 +161,18 @@
 
   # Enable the OpenSSH daemon.
   # services.openssh.enable = true;
+
+  # Remap the LG Fn+F5 hotkey from KEY_F21 to F24.
+  services.udev.extraHwdb = ''
+    evdev:name:LG WMI hotkeys:*
+     KEYBOARD_KEY_74=f24
+  '';
+
+  # Allow members of the users group to control the touchpad LED.
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="leds", KERNEL=="tpad_led", RUN+="${pkgs.coreutils}/bin/chgrp users /sys%p/brightness"
+    ACTION=="add", SUBSYSTEM=="leds", KERNEL=="tpad_led", RUN+="${pkgs.coreutils}/bin/chmod g+w /sys%p/brightness"
+  '';
 
   # Enable the flatpak
   services.flatpak = {
@@ -193,9 +207,8 @@
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "26.05"; # Did you read the comment?
 
-
   nix.settings.experimental-features = [
-  "nix-command"
-  "flakes"
+    "nix-command"
+    "flakes"
   ];
 }

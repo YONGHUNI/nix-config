@@ -126,6 +126,82 @@ The Fcitx5 input-method profile is also declared in this file.
 
 ---
 
+# LG Gram 터치패드 Fn+F5 및 상태 LED
+
+LG Gram에서 `Fn+F5`를 누르면 터치패드가 잠시 비활성화된 뒤 바로 다시 활성화되는 문제가 있었다.
+
+원인은 다음과 같았다.
+
+1. LG 펌웨어가 터치패드 상태를 전환한다.
+2. `lg_laptop` 커널 모듈이 같은 키를 `KEY_F21` 이벤트로 전달한다.
+3. KDE Plasma가 `KEY_F21`을 다시 처리하면서 터치패드 상태가 한 번 더 전환된다.
+
+`lg_laptop` 모듈을 비활성화하면 문제는 사라지지만, 다음 LG 전용 기능도 사용할 수 없게 된다.
+
+* 배터리 충전 제한
+* 키보드 백라이트
+* 터치패드 LED
+* 팬 모드
+* 리더 모드
+* Fn Lock
+* USB 충전 설정
+
+따라서 `lg_laptop` 모듈은 유지하고, `Fn+F5` 이벤트만 사용하지 않는 `F24`로 재매핑했다.
+
+### 시스템 설정
+
+`hosts/gram/configuration.nix`:
+
+```nix
+# Remap the LG Fn+F5 hotkey from KEY_F21 to F24.
+services.udev.extraHwdb = ''
+  evdev:name:LG WMI hotkeys:*
+   KEYBOARD_KEY_74=f24
+'';
+
+# Allow members of the users group to control the touchpad LED.
+services.udev.extraRules = ''
+  ACTION=="add", SUBSYSTEM=="leds", KERNEL=="tpad_led", RUN+="${pkgs.coreutils}/bin/chgrp users /sys%p/brightness"
+  ACTION=="add", SUBSYSTEM=="leds", KERNEL=="tpad_led", RUN+="${pkgs.coreutils}/bin/chmod g+w /sys%p/brightness"
+'';
+```
+
+### 사용자 설정
+
+`home/yonghun.nix`에서는 `F24`를 Plasma 전역 단축키로 등록하고, 터치패드 LED 값을 `0`과 `1` 사이에서 전환하는 스크립트를 실행한다.
+
+```nix
+hotkeys.commands."toggle-touchpad-led" = {
+  name = "Toggle touchpad LED";
+  key = "F24";
+  command = "${toggleTouchpadLed}/bin/toggle-touchpad-led";
+};
+```
+
+### 확인
+
+Fn+F5 입력 확인:
+
+```bash
+sudo evtest /dev/input/event6
+```
+
+정상 출력:
+
+```text
+KEY_F24
+```
+
+LED 상태 확인:
+
+```bash
+cat /sys/class/leds/tpad_led/brightness
+```
+
+`Fn+F5`를 누를 때 값이 `0`과 `1` 사이에서 전환되며, 터치패드 표시등도 함께 켜지고 꺼진다.
+
+
+
 # HOP
 
 [HOP](https://github.com/golbin/hop)은 HWP와 HWPX 문서를 열고 편집할 수 있는 오픈소스 데스크톱 프로그램입니다.

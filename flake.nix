@@ -1,21 +1,70 @@
 {
-  description = "NixOS WSL Configuration";
+  description = "Yonghun's NixOS configurations";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    # Laptop: current NixOS release
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+
+    # Preserve the existing WSL package version for now
+    nixpkgs-wsl.url = "github:NixOS/nixpkgs/nixos-25.11";
+
     nixos-wsl = {
       url = "github:nix-community/NixOS-WSL";
+      inputs.nixpkgs.follows = "nixpkgs-wsl";
+    };
+
+    home-manager = {
+      url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-  };
 
-  outputs = { self, nixpkgs, nixos-wsl, ... }: {
-    nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        nixos-wsl.nixosModules.default
-        ./configuration.nix
-      ];
+    nix-flatpak.url = "github:gmodena/nix-flatpak"; 
+ };
+
+  outputs =
+    {
+      nixpkgs,
+      nixpkgs-wsl,
+      nixos-wsl,
+      home-manager,
+      nix-flatpak,
+      ...
+    }:
+    {
+      nixosConfigurations = {
+        # Existing WSL machine
+        wsl = nixpkgs-wsl.lib.nixosSystem {
+          system = "x86_64-linux";
+
+          modules = [
+            nixos-wsl.nixosModules.default
+            ./hosts/wsl/configuration.nix
+          ];
+        };
+
+        # LG Gram laptop
+        gram = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+
+          modules = [
+            ./hosts/gram/configuration.nix
+
+            home-manager.nixosModules.home-manager
+
+            {
+              home-manager.useGlobalPkgs = true;
+              home-manager.useUserPackages = true;
+
+              # Preserve manually created files instead of failing.
+              home-manager.backupFileExtension = "hm-backup";
+
+              home-manager.users.yonghun =
+                import ./home/yonghun.nix;
+            }
+
+            nix-flatpak.nixosModules.nix-flatpak
+          ];
+        };
+      };
     };
-  };
 }

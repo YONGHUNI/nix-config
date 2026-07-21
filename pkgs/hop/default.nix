@@ -4,7 +4,7 @@
   fetchurl,
   dpkg,
   autoPatchelfHook,
-  makeWrapper,
+  wrapGAppsHook3,
   makeDesktopItem,
 
   glib,
@@ -52,7 +52,7 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [
     dpkg
     autoPatchelfHook
-    makeWrapper
+    wrapGAppsHook3
   ];
 
   buildInputs = [
@@ -74,9 +74,7 @@ stdenv.mkDerivation rec {
 
   unpackPhase = ''
     runHook preUnpack
-
     dpkg-deb -x "$src" .
-
     runHook postUnpack
   '';
 
@@ -91,10 +89,8 @@ stdenv.mkDerivation rec {
       cp -r opt/* "$out/opt/"
     fi
 
-    # Short command alias
     ln -s "$out/bin/hop-desktop" "$out/bin/hop"
 
-    # KDE/GNOME application menu entry
     install -Dm644 \
       "${desktopItem}/share/applications/hop.desktop" \
       "$out/share/applications/hop.desktop"
@@ -102,13 +98,13 @@ stdenv.mkDerivation rec {
     runHook postInstall
   '';
 
-  postFixup = ''
-    wrapProgram "$out/bin/hop-desktop" \
-      --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : \
-        "${gst_all_1.gst-plugins-base}/lib/gstreamer-1.0" \
-      --set GDK_BACKEND x11 \
-      --set WEBKIT_DISABLE_DMABUF_RENDERER 1 \
+  preFixup = ''
+    gappsWrapperArgs+=(
+      --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "${gst_all_1.gst-plugins-base}/lib/gstreamer-1.0"
+      --set GDK_BACKEND x11
+      --set WEBKIT_DISABLE_DMABUF_RENDERER 1
       --set WEBKIT_DISABLE_COMPOSITING_MODE 1
+    )
   '';
 
   meta = {

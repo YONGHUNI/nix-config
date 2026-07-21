@@ -200,6 +200,50 @@ WEBKIT_DISABLE_COMPOSITING_MODE=1
 
 이 환경변수들은 `pkgs/hop/default.nix`의 wrapper에 적용되어 있으므로 일반 실행 시 직접 지정할 필요가 없습니다.
 
+### GTK 파일 선택기 충돌
+
+파일 열기 또는 다른 이름으로 저장을 실행할 때 GTK 파일 선택기가 나타나기 직전에 HOP이 `SIGABRT`로 종료되는 문제가 있었습니다.
+
+충돌은 GTK 파일 선택기가 사용하는 GSettings schema와 dconf backend가 실행 환경에 노출되지 않아 발생했습니다.
+
+다음 런타임 경로가 필요합니다.
+
+* GTK3 GSettings schema
+* `gsettings-desktop-schemas`
+* dconf GIO module
+* GdkPixbuf loader
+
+이를 위해 패키지의 `nativeBuildInputs`에서 `makeWrapper` 대신 `wrapGAppsHook3`를 사용합니다.
+
+```nix
+nativeBuildInputs = [
+  dpkg
+  autoPatchelfHook
+  wrapGAppsHook3
+];
+```
+
+기존 HOP 전용 환경변수는 별도의 `wrapProgram`으로 다시 감싸지 않고 `gappsWrapperArgs`에 추가합니다.
+
+```nix
+preFixup = ''
+  gappsWrapperArgs+=(
+    --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "${gst_all_1.gst-plugins-base}/lib/gstreamer-1.0"
+    --set GDK_BACKEND x11
+    --set WEBKIT_DISABLE_DMABUF_RENDERER 1
+    --set WEBKIT_DISABLE_COMPOSITING_MODE 1
+  )
+'';
+```
+
+정상 적용되면 실행 로그에서 다음과 같이 dconf backend와 GTK 파일 선택기 설정이 로드됩니다.
+
+```text
+Found default implementation dconf for ‘gsettings-backend’
+watch_fast: "/org/gtk/settings/file-chooser/"
+```
+
+
 ## 업데이트
 
 새 버전이 공개되면 `pkgs/hop/default.nix`의 `version`과 `src.hash`를 갱신합니다.

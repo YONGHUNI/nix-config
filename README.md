@@ -20,7 +20,8 @@ System-wide settings and lightweight base tools belong in this repository. Proje
 ├── hosts/
 │   ├── gram/
 │   │   ├── configuration.nix
-│   │   └── hardware-configuration.nix
+│   │   ├── hardware-configuration.nix
+│   │   └── home.nix
 │   └── wsl/
 │       └── configuration.nix
 └── pkgs/
@@ -109,7 +110,8 @@ sudo nixos-rebuild switch --flake .#wsl
 
 ## Home Manager
 
-User packages and user-level configuration are managed in `home/yonghun.nix`.
+Shared user packages and user-level configuration are managed in `home/yonghun.nix`.
+LG Gram-specific Plasma and touchpad LED configuration is managed in `hosts/gram/home.nix`.
 
 Current packages include:
 
@@ -168,38 +170,41 @@ services.udev.extraRules = ''
 
 ### 사용자 설정
 
-`home/yonghun.nix`에서는 `F24`를 Plasma 전역 단축키로 등록하고, 터치패드 LED 값을 `0`과 `1` 사이에서 전환하는 스크립트를 실행한다.
+`hosts/gram/home.nix`에서는 `F24`를 Plasma 전역 단축키로 등록하고, KWin이 보고하는 실제 터치패드 활성화 상태에 따라 LED를 동기화한다.
+
+터치패드 장치의 `event` 번호는 부팅이나 입력 장치 구성에 따라 달라질 수 있으므로 특정 장치 번호를 하드코딩하지 않는다. 대신 KWin의 `devicesSysNames` 목록을 순회하며 `touchpad = true`인 장치를 자동으로 찾는다.
 
 ```nix
-hotkeys.commands."toggle-touchpad-led" = {
-  name = "Toggle touchpad LED";
+hotkeys.commands."sync-touchpad-led" = {
+  name = "Sync touchpad LED";
   key = "F24";
-  command = "${toggleTouchpadLed}/bin/toggle-touchpad-led";
+  command = "${syncTouchpadLed}/bin/sync-touchpad-led";
 };
 ```
 
 ### 확인
 
-Fn+F5 입력 확인:
+KWin이 보고하는 터치패드 상태와 LED 값을 함께 확인한다.
 
 ```bash
-sudo evtest /dev/input/event6
+busctl --user get-property \
+  org.kde.KWin \
+  /org/kde/KWin/InputDevice/event8 \
+  org.kde.KWin.InputDevice \
+  enabled
+
+cat /sys/class/leds/tpad_led/brightness
+
 ```
 
-정상 출력:
+정상 대응:
 
 ```text
-KEY_F24
+b true  → 1
+b false → 0
 ```
 
-LED 상태 확인:
-
-```bash
-cat /sys/class/leds/tpad_led/brightness
-```
-
-`Fn+F5`를 누를 때 값이 `0`과 `1` 사이에서 전환되며, 터치패드 표시등도 함께 켜지고 꺼진다.
-
+스크립트 내부에서는 `event8`을 고정하지 않고 터치패드 장치를 자동으로 탐지한다. 위 명령의 `event8`은 현재 상태를 수동으로 확인하기 위한 예시다.
 
 
 # HOP

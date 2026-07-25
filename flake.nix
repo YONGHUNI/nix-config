@@ -69,6 +69,7 @@
                 imports = [
                   plasma-manager.homeModules.plasma-manager
                   ./home/yonghun.nix
+                  ./hosts/gram/home.nix
                 ];
               };
             }

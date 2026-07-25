@@ -1,0 +1,20 @@
+{ ... }:
+
+{
+  # Provide location information to applications on laptops.
+  location.provider = "geoclue2";
+
+  services.geoclue2 = {
+    enable = true;
+    enableWifi = true;
+
+    # Disable location sources not used on ordinary laptops.
+    enableNmea = false;
+    enable3G = false;
+    enableCDMA = false;
+    enableModemGPS = false;
+
+    # Do not contribute nearby Wi-Fi information.
+    submitData = false;
+  };
+}

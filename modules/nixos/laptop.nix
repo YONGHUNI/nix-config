@@ -17,4 +17,7 @@
     # Do not contribute nearby Wi-Fi information.
     submitData = false;
   };
+
+
+  services.automatic-timezoned.enable = true;
 }

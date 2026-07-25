@@ -40,7 +40,7 @@
   networking.networkmanager.enable = true;
 
   # Set your time zone.
-  time.timeZone = "Asia/Seoul";
+  #time.timeZone = "Asia/Seoul"; # Time zone is managed automatically by the laptop profile.
 
   i18n.inputMethod = {
     enable = true;

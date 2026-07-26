@@ -16,8 +16,8 @@
 
   # Shell aliases
   programs.bash.shellAliases = {
-    nrs = "sudo nixos-rebuild switch --flake ~/nix-config#nixos";
-    nrt = "sudo nixos-rebuild test --flake ~/nix-config#nixos";
+    nrs = "sudo nixos-rebuild switch --flake ~/nix-config#wsl";
+    nrt = "sudo nixos-rebuild test --flake ~/nix-config#wsl";
   };
 
   # System packages

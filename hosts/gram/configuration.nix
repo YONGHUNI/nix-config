@@ -29,6 +29,12 @@
     "tpm2-device=auto"
   ];
 
+  # Hardware firmware and Intel CPU microcode
+  hardware.enableRedistributableFirmware = true;
+
+  # Firmware updates through LVFS
+  services.fwupd.enable = true;
+
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 

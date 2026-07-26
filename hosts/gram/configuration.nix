@@ -148,6 +148,7 @@
     git
     htop
     fastfetch
+    wineWow64Packages.stable
 
   ];
 

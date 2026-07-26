@@ -1,6 +1,18 @@
-{ ... }:
+{ pkgs, ... }:
 
 {
+  # Provide Nerd Fonts for terminal prompts
+  fonts = {
+    packages = with pkgs; [
+      nerd-fonts.jetbrains-mono
+      nerd-fonts.symbols-only
+    ];
+
+    fontconfig.defaultFonts.monospace = [
+      "JetBrainsMono Nerd Font"
+    ];
+  };
+
   # Provide location information to applications on laptops.
   location.provider = "geoclue2";
 

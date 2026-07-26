@@ -25,6 +25,11 @@
     };
 
     nix-flatpak.url = "github:gmodena/nix-flatpak";
+
+    dotfiles = {
+      url = "github:YONGHUNI/dotfiles";
+      flake = false;
+    };
   };
 
   outputs =
@@ -35,6 +40,7 @@
       home-manager,
       plasma-manager,
       nix-flatpak,
+      dotfiles,
       ...
     }:
     {
@@ -61,6 +67,10 @@
             {
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
+
+              home-manager.extraSpecialArgs = {
+                inherit dotfiles;
+              };
 
               # Preserve manually created files instead of failing.
               home-manager.backupFileExtension = "hm-backup";

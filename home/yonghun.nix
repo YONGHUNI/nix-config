@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, dotfiles, ... }:
 
 let
   hop = pkgs.callPackage ../pkgs/hop { };
@@ -11,6 +11,13 @@ in
   home.stateVersion = "26.05";
 
   programs.home-manager.enable = true;
+
+  home.file = {
+    ".bashrc".source = "${dotfiles}/.bashrc";
+    ".vimrc".source = "${dotfiles}/.vimrc";
+    ".tmux.conf".source = "${dotfiles}/.tmux.conf";
+    ".Rprofile".source = "${dotfiles}/.Rprofile";
+  };
 
   home.packages = with pkgs; [
     git

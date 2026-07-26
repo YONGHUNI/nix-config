@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "dotfiles": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785045023,
+        "narHash": "sha256-j2QFhKiD4SuLqNMGZq+oZb4zmA9F22BE53uYsnvDO0E=",
+        "owner": "YONGHUNI",
+        "repo": "dotfiles",
+        "rev": "888910f40fdc0f3be451de6331ce6f930b2a82b8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "YONGHUNI",
+        "repo": "dotfiles",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -130,6 +146,7 @@
     },
     "root": {
       "inputs": {
+        "dotfiles": "dotfiles",
         "home-manager": "home-manager",
         "nix-flatpak": "nix-flatpak",
         "nixos-wsl": "nixos-wsl",

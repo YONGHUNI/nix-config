@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ lib, pkgs, ... }:
 
 let
   syncTouchpadLed = pkgs.writeShellScriptBin "sync-touchpad-led" ''
@@ -81,6 +81,7 @@ let
         ;;
     esac
   '';
+
 in
 {
   programs.plasma = {
@@ -93,7 +94,34 @@ in
     };
   };
 
-  home.packages = [
+  home.activation.installOnlyOfficeFonts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    fontDir="$HOME/.local/share/fonts/onlyoffice"
+
+    rm -rf "$fontDir"
+    mkdir -p "$fontDir"
+
+    for fontPackage in \
+      ${pkgs.noto-fonts} \
+      ${pkgs.noto-fonts-cjk-sans} \
+      ${pkgs.noto-fonts-cjk-serif} \
+      ${pkgs.nanum}
+    do
+      ${pkgs.findutils}/bin/find -L "$fontPackage/share" \
+        -type f \
+        \( -iname '*.ttf' -o -iname '*.ttc' -o -iname '*.otf' \) \
+        -exec ${pkgs.coreutils}/bin/cp -L -f '{}' "$fontDir/" \;
+    done
+
+    ${pkgs.coreutils}/bin/chmod 644 "$fontDir"/*
+    ${pkgs.fontconfig}/bin/fc-cache -f
+  '';
+
+  home.packages = with pkgs; [
     syncTouchpadLed
+
+    microsoft-edge
+    onlyoffice-desktopeditors
+    positron-bin
+    qgis
   ];
 }

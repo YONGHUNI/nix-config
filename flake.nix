@@ -43,13 +43,30 @@
       dotfiles,
       ...
     }:
+    let
+      commonNixModule = {
+        nixpkgs.config.allowUnfree = true;
+
+        nix.settings = {
+          experimental-features = [
+            "nix-command"
+            "flakes"
+          ];
+
+          auto-optimise-store = true;
+        };
+      };
+    in
     {
+      formatter.x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.nixfmt-tree;
+
       nixosConfigurations = {
         # Existing WSL machine
         wsl = nixpkgs-wsl.lib.nixosSystem {
           system = "x86_64-linux";
 
           modules = [
+            commonNixModule
             nixos-wsl.nixosModules.default
             ./hosts/wsl/configuration.nix
           ];
@@ -60,6 +77,7 @@
           system = "x86_64-linux";
 
           modules = [
+            commonNixModule
             ./hosts/gram/configuration.nix
 
             home-manager.nixosModules.home-manager

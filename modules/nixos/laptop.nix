@@ -30,6 +30,5 @@
     submitData = false;
   };
 
-
   services.automatic-timezoned.enable = true;
 }

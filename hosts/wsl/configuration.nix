@@ -1,11 +1,14 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 {
   wsl.enable = true;
   wsl.defaultUser = "yhsuh";
 
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  nix.settings.auto-optimise-store = true;
   nix.gc = {
     automatic = true;
     options = "--delete-older-than 7d";

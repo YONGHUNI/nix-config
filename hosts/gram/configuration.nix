@@ -101,6 +101,33 @@
     options = "korean:ralt_hangul,korean:rctrl_hanja";
   };
 
+  fonts = {
+    fontDir.enable = true;
+
+    packages = with pkgs; [
+      noto-fonts
+      noto-fonts-cjk-sans
+      noto-fonts-cjk-serif
+      nanum
+    ];
+
+    fontconfig.defaultFonts = {
+      sansSerif = [
+        "Noto Sans CJK KR"
+        "NanumGothic"
+      ];
+
+      serif = [
+        "Noto Serif CJK KR"
+        "NanumMyeongjo"
+      ];
+
+      monospace = [
+        "Noto Sans Mono CJK KR"
+      ];
+    };
+  };
+
   # Enable CUPS to print documents.
   services.printing.enable = true;
 
@@ -140,9 +167,6 @@
   # Install firefox.
   programs.firefox.enable = true;
 
-  # Allow unfree packages
-  nixpkgs.config.allowUnfree = true;
-
   # nix gc settings
   nix = {
     gc = {
@@ -151,12 +175,7 @@
       options = "--delete-older-than 30d";
     };
 
-    settings = {
-      auto-optimise-store = true;
-    };
   };
-
-
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
@@ -166,8 +185,6 @@
     curl
     tree
     zoom-us
-    git
-    htop
     fastfetch
     wineWow64Packages.stable
 
@@ -231,8 +248,4 @@
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "26.05"; # Did you read the comment?
 
-  nix.settings.experimental-features = [
-    "nix-command"
-    "flakes"
-  ];
 }

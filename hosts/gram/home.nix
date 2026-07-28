@@ -123,5 +123,7 @@ in
     onlyoffice-desktopeditors
     positron-bin
     qgis
+
+    teams-for-linux
   ];
 }

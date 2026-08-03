@@ -45,6 +45,10 @@
   # Enable networking
   networking.networkmanager.enable = true;
 
+  networking.networkmanager.plugins = with pkgs; [
+    networkmanager-openconnect
+  ];
+
   # Set your time zone.
   #time.timeZone = "Asia/Seoul"; # Time zone is managed automatically by the laptop profile.
 
@@ -187,6 +191,9 @@
     zoom-us
     fastfetch
     wineWow64Packages.stable
+
+    wireguard-tools
+    openconnect
 
   ];
 

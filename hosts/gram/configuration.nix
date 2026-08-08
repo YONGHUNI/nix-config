@@ -31,6 +31,12 @@
 
   # Hardware firmware and Intel CPU microcode
   hardware.enableRedistributableFirmware = true;
+  
+  # Bluetooth
+  hardware.bluetooth = {
+    enable = true;
+    powerOnBoot = true;
+  };
 
   # Firmware updates through LVFS
   services.fwupd.enable = true;

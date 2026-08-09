@@ -2,10 +2,11 @@
 
 Personal NixOS configurations managed with flakes.
 
-This repository currently manages two environments:
+This repository currently manages three environments:
 
-- **LG Gram (`gram`)**: NixOS desktop
+- **LG Gram (`gram`)**: personal NixOS laptop
 - **WSL (`wsl`)**: NixOS-WSL development environment
+- **Research VM (`nixos-research`)**: GPU-enabled NixOS research VM running on the Proxmox homelab
 
 System configuration, hardware support, desktop applications, and general-purpose command-line tools belong in this repository.
 
@@ -22,8 +23,10 @@ System-level hardware configuration, including GPU drivers, remains in this repo
 ├── README.md
 ├── docs/
 │   ├── gram-touchpad.md
+│   ├── homelab.md
 │   ├── hop.md
-│   └── kakaotalk-bottles.md
+│   ├── kakaotalk-bottles.md
+│   └── research-vm.md
 ├── home/
 │   └── yonghun.nix
 ├── hosts/
@@ -31,6 +34,9 @@ System-level hardware configuration, including GPU drivers, remains in this repo
 │   │   ├── configuration.nix
 │   │   ├── hardware-configuration.nix
 │   │   └── home.nix
+│   ├── nixos-research/
+│   │   ├── configuration.nix
+│   │   └── hardware-configuration.nix
 │   └── wsl/
 │       └── configuration.nix
 ├── modules/
@@ -59,6 +65,19 @@ System-level hardware configuration, including GPU drivers, remains in this repo
 - HOP HWP/HWPX editor
 - LG Gram touchpad hotkey and LED handling
 - Base desktop and command-line tools
+
+### Research VM
+
+- NixOS 26.05
+- Proxmox/QEMU guest integration
+- NVIDIA GPU support for the passed-through research GPU
+- SSH key-only remote access with root login disabled
+- Dedicated persistent `/data` filesystem
+- Managed research workspace under `/data/yonghun`
+- Minimal host-level administrative tools
+- Project-specific research environments kept outside the system configuration
+
+See [Homelab architecture](docs/homelab.md) and [Research VM](docs/research-vm.md) for the infrastructure boundary and operational details.
 
 ### WSL
 
@@ -89,6 +108,18 @@ sudo nixos-rebuild build --flake .#gram
 sudo nixos-rebuild switch --flake .#gram
 ```
 
+### Research VM
+
+```bash
+cd ~/nix-config
+
+# Build without changing the active system generation
+sudo nixos-rebuild build --flake .#nixos-research
+
+# Apply the configuration
+sudo nixos-rebuild switch --flake .#nixos-research
+```
+
 ### WSL
 
 ```bash
@@ -110,9 +141,9 @@ nrs
 
 ## Updating flake inputs
 
-The Gram and WSL configurations use separate nixpkgs inputs:
+The configurations use separate nixpkgs inputs where required:
 
-- `nixpkgs`: NixOS 26.05 for the Gram
+- `nixpkgs`: NixOS 26.05 for the Gram and research VM
 - `nixpkgs-wsl`: NixOS 25.11 for WSL
 
 Update all flake inputs with:
@@ -128,11 +159,18 @@ Review the lock-file changes before rebuilding:
 git diff flake.lock
 ```
 
-Then build and apply the relevant configuration:
+Then build and apply the relevant configuration, for example:
 
 ```bash
 sudo nixos-rebuild build --flake .#gram
 sudo nixos-rebuild switch --flake .#gram
+```
+
+or:
+
+```bash
+sudo nixos-rebuild build --flake .#nixos-research
+sudo nixos-rebuild switch --flake .#nixos-research
 ```
 
 or:
@@ -173,6 +211,20 @@ After restoring the expected disk and encryption layout:
 sudo nixos-rebuild switch --flake .#gram
 ```
 
+### Research VM
+
+Clone the repository inside the VM and apply the research host configuration:
+
+```bash
+git clone https://github.com/YONGHUNI/nix-config.git ~/nix-config
+cd ~/nix-config
+sudo nixos-rebuild switch --flake .#nixos-research
+```
+
+The `nixos-research` configuration assumes the surrounding Proxmox VM already provides the expected virtual hardware, GPU passthrough, boot disk, and persistent data disk. Those hypervisor-side resources are intentionally not reproduced by this repository.
+
+`hosts/nixos-research/hardware-configuration.nix` contains machine-specific filesystem UUIDs and should be regenerated or reviewed when recreating the VM.
+
 ### WSL
 
 ```bash
@@ -210,6 +262,8 @@ This includes:
 
 ## Documentation
 
+- [Homelab architecture](docs/homelab.md)
+- [Research VM (`nixos-research`)](docs/research-vm.md)
 - [LG Gram 터치패드 Fn+F5 및 상태 LED](docs/gram-touchpad.md)
 - [HOP 패키징 및 실행](docs/hop.md)
 - [Bottles와 카카오톡](docs/kakaotalk-bottles.md)
@@ -220,14 +274,18 @@ Included:
 
 - NixOS host configurations
 - Home Manager user configuration
-- Hardware and boot settings
+- Hardware and boot settings for managed NixOS systems
 - General-purpose system and user tools
 - Locally packaged desktop applications
 - Reproducible Flatpak declarations
 - Host-level Wine and application support
+- Guest-side configuration for the Proxmox research VM
+- Documentation of the homelab boundary relevant to managed NixOS guests
 
 Excluded:
 
+- Proxmox host configuration and VM lifecycle state
+- Hypervisor-side ZFS, PCI passthrough, and virtual network configuration
 - Project-specific Python and R environments
 - Project-specific CUDA toolkits and machine-learning frameworks
 - Large datasets

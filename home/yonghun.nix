@@ -2,27 +2,6 @@
 
 let
   hop = pkgs.callPackage ../pkgs/hop { };
-
-  kakaoClipboardFix = pkgs.writeShellApplication {
-    name = "kakao-clipboard-fix";
-
-    runtimeInputs = with pkgs; [
-      imagemagick
-      wl-clipboard
-      gnugrep
-    ];
-
-    text = ''
-      if ! wl-paste --list-types | grep -qx 'image/bmp'; then
-        echo "KakaoTalk image/bmp data was not found in the clipboard." >&2
-        exit 1
-      fi
-
-      wl-paste --type image/bmp \
-        | magick bmp:- png:- \
-        | wl-copy --type image/png
-    '';
-  };
 in
 {
   home.username = "yonghun";
@@ -47,7 +26,6 @@ in
     bat
     wev
     hop
-    kakaoClipboardFix
   ];
 
   # Fcitx5 input method list

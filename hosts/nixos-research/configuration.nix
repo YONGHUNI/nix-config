@@ -50,6 +50,10 @@
   users.users.yonghun = {
     isNormalUser = true;
     extraGroups = [ "wheel" ];
+
+    openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIoIx6gg+hqRjRV1lRCyOAVIPSC/sEIoddUAgElcC/Tv dydgns0556@gmail.com"
+    ];
   };
 
   # Basic administrative tools only
@@ -65,6 +69,13 @@
   #    "nix-command"
   #    "flakes"
   #  ];
+
+  systemd.tmpfiles.rules = [
+    "d /data/yonghun 0755 yonghun users -"
+    "d /data/yonghun/projects 0755 yonghun users -"
+    "d /data/yonghun/datasets 0755 yonghun users -"
+    "d /data/yonghun/scratch 0755 yonghun users -"
+  ];
 
   system.stateVersion = "26.05";
 }

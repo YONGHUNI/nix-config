@@ -25,6 +25,7 @@ System-level hardware configuration, including GPU drivers, remains in this repo
 ├── flake.lock
 ├── README.md
 ├── docs/
+│   ├── dns-container.md
 │   ├── gram-touchpad.md
 │   ├── homelab.md
 │   ├── hop.md
@@ -91,7 +92,7 @@ System-level hardware configuration, including GPU drivers, remains in this repo
 - Caddy internal CA for local TLS
 - SSH key-only remote access with root login disabled
 
-See [Homelab architecture](docs/homelab.md) for addresses, service routing, TLS, and the infrastructure boundary.
+See [Homelab architecture](docs/homelab.md), [Research VM](docs/research-vm.md), and [DNS container](docs/dns-container.md) for infrastructure and guest-specific details.
 
 ### WSL
 
@@ -276,6 +277,7 @@ This includes:
 
 - [Homelab architecture](docs/homelab.md)
 - [Research VM (`nixos-research`)](docs/research-vm.md)
+- [DNS container (`nixos-dns`)](docs/dns-container.md)
 - [LG Gram 터치패드 Fn+F5 및 상태 LED](docs/gram-touchpad.md)
 - [HOP 패키징 및 실행](docs/hop.md)
 - [Bottles와 카카오톡](docs/kakaotalk-bottles.md)

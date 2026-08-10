@@ -2,11 +2,12 @@
 
 Personal NixOS configurations managed with flakes.
 
-This repository currently manages three environments:
+This repository currently manages four environments:
 
 - **LG Gram (`gram`)**: personal NixOS laptop
 - **WSL (`wsl`)**: NixOS-WSL development environment
-- **Research VM (`nixos-research`)**: GPU-enabled NixOS research VM running on the Proxmox homelab
+- **Research VM (`nixos-research`)**: GPU-enabled NixOS research VM on Proxmox
+- **DNS container (`nixos-dns`)**: NixOS LXC providing local DNS and HTTPS reverse proxy services
 
 System configuration, hardware support, desktop applications, and general-purpose command-line tools belong in this repository.
 
@@ -18,6 +19,8 @@ System-level hardware configuration, including GPU drivers, remains in this repo
 
 ```text
 .
+├── certs/
+│   └── caddy-root.crt
 ├── flake.nix
 ├── flake.lock
 ├── README.md
@@ -34,6 +37,8 @@ System-level hardware configuration, including GPU drivers, remains in this repo
 │   │   ├── configuration.nix
 │   │   ├── hardware-configuration.nix
 │   │   └── home.nix
+│   ├── nixos-dns/
+│   │   └── configuration.nix
 │   ├── nixos-research/
 │   │   ├── configuration.nix
 │   │   └── hardware-configuration.nix
@@ -64,6 +69,7 @@ System-level hardware configuration, including GPU drivers, remains in this repo
 - System Wine for the KakaoTalk Bottle
 - HOP HWP/HWPX editor
 - LG Gram touchpad hotkey and LED handling
+- Homelab Caddy root CA trust
 - Base desktop and command-line tools
 
 ### Research VM
@@ -77,7 +83,15 @@ System-level hardware configuration, including GPU drivers, remains in this repo
 - Minimal host-level administrative tools
 - Project-specific research environments kept outside the system configuration
 
-See [Homelab architecture](docs/homelab.md) and [Research VM](docs/research-vm.md) for the infrastructure boundary and operational details.
+### DNS container
+
+- NixOS 26.05 in a Proxmox LXC container
+- [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome) for upstream DNS and local [`home.arpa`](https://www.rfc-editor.org/rfc/rfc8375.html) rewrites
+- [Caddy](https://caddyserver.com/) for HTTPS reverse proxying
+- Caddy internal CA for local TLS
+- SSH key-only remote access with root login disabled
+
+See [Homelab architecture](docs/homelab.md) for addresses, service routing, TLS, and the infrastructure boundary.
 
 ### WSL
 
@@ -113,11 +127,17 @@ sudo nixos-rebuild switch --flake .#gram
 ```bash
 cd ~/nix-config
 
-# Build without changing the active system generation
 sudo nixos-rebuild build --flake .#nixos-research
-
-# Apply the configuration
 sudo nixos-rebuild switch --flake .#nixos-research
+```
+
+### DNS container
+
+```bash
+cd /etc/nixos/nix-config
+
+sudo nixos-rebuild build --flake .#nixos-dns
+sudo nixos-rebuild switch --flake .#nixos-dns
 ```
 
 ### WSL
@@ -143,7 +163,7 @@ nrs
 
 The configurations use separate nixpkgs inputs where required:
 
-- `nixpkgs`: NixOS 26.05 for the Gram and research VM
+- `nixpkgs`: NixOS 26.05 for the Gram, research VM, and DNS container
 - `nixpkgs-wsl`: NixOS 25.11 for WSL
 
 Update all flake inputs with:
@@ -159,26 +179,7 @@ Review the lock-file changes before rebuilding:
 git diff flake.lock
 ```
 
-Then build and apply the relevant configuration, for example:
-
-```bash
-sudo nixos-rebuild build --flake .#gram
-sudo nixos-rebuild switch --flake .#gram
-```
-
-or:
-
-```bash
-sudo nixos-rebuild build --flake .#nixos-research
-sudo nixos-rebuild switch --flake .#nixos-research
-```
-
-or:
-
-```bash
-sudo nixos-rebuild build --flake .#wsl
-sudo nixos-rebuild switch --flake .#wsl
-```
+Then build and apply the relevant configuration with the commands above.
 
 ## Deploying
 
@@ -224,6 +225,17 @@ sudo nixos-rebuild switch --flake .#nixos-research
 The `nixos-research` configuration assumes the surrounding Proxmox VM already provides the expected virtual hardware, GPU passthrough, boot disk, and persistent data disk. Those hypervisor-side resources are intentionally not reproduced by this repository.
 
 `hosts/nixos-research/hardware-configuration.nix` contains machine-specific filesystem UUIDs and should be regenerated or reviewed when recreating the VM.
+
+### DNS container
+
+The `nixos-dns` configuration assumes the Proxmox LXC container and its network attachment already exist. Apply the guest configuration from the repository inside the container:
+
+```bash
+cd /etc/nixos/nix-config
+sudo nixos-rebuild switch --flake .#nixos-dns
+```
+
+Container creation, addressing, and Proxmox-side firewall or bridge configuration remain outside this repository.
 
 ### WSL
 
@@ -279,12 +291,13 @@ Included:
 - Locally packaged desktop applications
 - Reproducible Flatpak declarations
 - Host-level Wine and application support
-- Guest-side configuration for the Proxmox research VM
+- Guest-side configuration for the Proxmox research VM and DNS LXC
+- Public CA certificates required by managed clients
 - Documentation of the homelab boundary relevant to managed NixOS guests
 
 Excluded:
 
-- Proxmox host configuration and VM lifecycle state
+- Proxmox host configuration and VM/LXC lifecycle state
 - Hypervisor-side ZFS, PCI passthrough, and virtual network configuration
 - Project-specific Python and R environments
 - Project-specific CUDA toolkits and machine-learning frameworks

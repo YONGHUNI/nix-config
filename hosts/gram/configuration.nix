@@ -31,7 +31,7 @@
 
   # Hardware firmware and Intel CPU microcode
   hardware.enableRedistributableFirmware = true;
-  
+
   # Bluetooth
   hardware.bluetooth = {
     enable = true;
@@ -53,6 +53,10 @@
 
   networking.networkmanager.plugins = with pkgs; [
     networkmanager-openconnect
+  ];
+
+  security.pki.certificateFiles = [
+    ../../certs/caddy-root.crt
   ];
 
   # Set your time zone.

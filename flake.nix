@@ -114,6 +114,16 @@
             ./hosts/nixos-research/configuration.nix
           ];
         };
+
+        nixos-dns = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+
+          modules = [
+            commonNixModule
+            ./hosts/nixos-dns/configuration.nix
+          ];
+        };
+
       };
     };
 }

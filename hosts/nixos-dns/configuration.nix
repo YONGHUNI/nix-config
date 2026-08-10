@@ -11,6 +11,7 @@ let
     "pve.home.arpa" = "192.168.0.200";
     "gpu.home.arpa" = "192.168.0.201";
     "dns.home.arpa" = "192.168.0.202";
+    "proxmox.home.arpa" = "192.168.0.202";
   };
 in
 {
@@ -22,7 +23,11 @@ in
 
   networking.firewall = {
     allowedUDPPorts = [ 53 ];
-    allowedTCPPorts = [ 53 ];
+    allowedTCPPorts = [
+      53
+      80
+      443
+    ];
   };
 
   services.openssh = {
@@ -76,6 +81,31 @@ in
           inherit domain answer;
           enabled = true;
         }) localHosts;
+      };
+    };
+  };
+
+  services.caddy = {
+    enable = true;
+
+    virtualHosts = {
+      "proxmox.home.arpa" = {
+        extraConfig = ''
+          tls internal
+
+          reverse_proxy https://192.168.0.200:8006 {
+            transport http {
+              tls_insecure_skip_verify
+            }
+          }
+        '';
+      };
+
+      "dns.home.arpa" = {
+        extraConfig = ''
+          tls internal
+          reverse_proxy http://127.0.0.1:3000
+        '';
       };
     };
   };

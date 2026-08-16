@@ -12,6 +12,7 @@ let
     "gpu.home.arpa" = "192.168.0.201";
     "dns.home.arpa" = "192.168.0.202";
     "proxmox.home.arpa" = "192.168.0.202";
+    "r.home.arpa" = "192.168.0.202";
   };
 in
 {
@@ -105,6 +106,13 @@ in
         extraConfig = ''
           tls internal
           reverse_proxy http://127.0.0.1:3000
+        '';
+      };
+
+      "r.home.arpa" = {
+        extraConfig = ''
+          tls internal
+          reverse_proxy http://192.168.0.203:8787
         '';
       };
     };

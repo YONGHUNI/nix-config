@@ -23,6 +23,9 @@
   services.openssh.settings.PermitRootLogin = "no";
   services.openssh.settings.PasswordAuthentication = false;
 
+  # Compatibility for generic dynamically linked Linux binaries
+  programs.nix-ld.enable = true;
+
   # NVIDIA GPU
   boot.blacklistedKernelModules = [ "nouveau" ];
   #nixpkgs.config.allowUnfree = true;

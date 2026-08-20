@@ -86,6 +86,25 @@ let
         ;;
     esac
   '';
+  positronWayland = pkgs.symlinkJoin {
+    name = "positron-wayland";
+    paths = [ pkgsUnstable.positron-bin ];
+
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+
+    postBuild = ''
+      wrapProgram $out/bin/positron \
+        --add-flags "--ozone-platform=wayland"
+
+      desktop=$out/share/applications/positron.desktop
+      cp --remove-destination "$(readlink -f "$desktop")" "$desktop"
+
+      substituteInPlace "$desktop" \
+        --replace-fail "${pkgsUnstable.positron-bin}/share/positron/.positron-wrapped %F" "$out/bin/positron %F" \
+        --replace-fail "${pkgsUnstable.positron-bin}/share/positron/.positron-wrapped --new-window %F" "$out/bin/positron --new-window %F"
+    '';
+
+  };
 
 in
 {
@@ -126,7 +145,7 @@ in
 
     microsoft-edge
     onlyoffice-desktopeditors
-    pkgsUnstable.positron-bin
+    positronWayland
     qgis
 
     teams-for-linux

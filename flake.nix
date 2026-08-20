@@ -4,6 +4,7 @@
   inputs = {
     # Laptop: current NixOS release
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     # Preserve the existing WSL package version for now
     nixpkgs-wsl.url = "github:NixOS/nixpkgs/nixos-25.11";
@@ -35,6 +36,7 @@
   outputs =
     {
       nixpkgs,
+      nixpkgs-unstable,
       nixpkgs-wsl,
       nixos-wsl,
       home-manager,
@@ -88,6 +90,10 @@
 
               home-manager.extraSpecialArgs = {
                 inherit dotfiles;
+                pkgsUnstable = import nixpkgs-unstable {
+                  system = "x86_64-linux";
+                  config.allowUnfree = true;
+                };
               };
 
               # Preserve manually created files instead of failing.

@@ -1,4 +1,9 @@
-{ lib, pkgs, ... }:
+{
+  lib,
+  pkgs,
+  pkgsUnstable,
+  ...
+}:
 
 let
   syncTouchpadLed = pkgs.writeShellScriptBin "sync-touchpad-led" ''
@@ -121,7 +126,7 @@ in
 
     microsoft-edge
     onlyoffice-desktopeditors
-    positron-bin
+    pkgsUnstable.positron-bin
     qgis
 
     teams-for-linux

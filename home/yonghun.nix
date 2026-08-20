@@ -12,13 +12,6 @@ in
 
   programs.home-manager.enable = true;
 
-  home.file = {
-    ".bashrc".source = "${dotfiles}/.bashrc";
-    ".vimrc".source = "${dotfiles}/.vimrc";
-    ".tmux.conf".source = "${dotfiles}/.tmux.conf";
-    ".Rprofile".source = "${dotfiles}/.Rprofile";
-  };
-
   home.packages = with pkgs; [
     git
     gh

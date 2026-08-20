@@ -102,31 +102,75 @@
               home-manager.users.yonghun = {
                 imports = [
                   plasma-manager.homeModules.plasma-manager
+                  ./home/common.nix
                   ./home/yonghun.nix
                   ./hosts/gram/home.nix
                 ];
               };
             }
-
             nix-flatpak.nixosModules.nix-flatpak
           ];
         };
-
         nixos-research = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
           modules = [
             commonNixModule
             ./hosts/nixos-research/configuration.nix
+
+            home-manager.nixosModules.home-manager
+
+            {
+              home-manager.useGlobalPkgs = true;
+              home-manager.useUserPackages = true;
+
+              home-manager.extraSpecialArgs = {
+                inherit dotfiles;
+              };
+
+              home-manager.backupFileExtension = "hm-backup";
+
+              home-manager.users.yonghun = {
+                imports = [
+                  ./home/common.nix
+                ];
+
+                home.username = "yonghun";
+                home.homeDirectory = "/home/yonghun";
+                home.stateVersion = "26.05";
+              };
+            }
           ];
         };
-
         nixos-dns = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
 
           modules = [
             commonNixModule
             ./hosts/nixos-dns/configuration.nix
+
+            home-manager.nixosModules.home-manager
+
+            {
+              home-manager.useGlobalPkgs = true;
+              home-manager.useUserPackages = true;
+
+              home-manager.extraSpecialArgs = {
+                inherit dotfiles;
+              };
+
+              home-manager.backupFileExtension = "hm-backup";
+
+              home-manager.users.yonghun = {
+                imports = [
+                  ./home/common.nix
+                ];
+
+                home.username = "yonghun";
+                home.homeDirectory = "/home/yonghun";
+                home.stateVersion = "26.05";
+              };
+            }
           ];
         };
 

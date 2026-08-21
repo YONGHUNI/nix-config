@@ -15,6 +15,58 @@ Project-specific runtimes and dependencies—such as Python or R versions, geosp
 
 System-level hardware configuration, including GPU drivers, remains in this repository.
 
+## Homelab topology
+
+The homelab uses `nixos-dns` as the local DNS and HTTPS entry point. AdGuard Home resolves `home.arpa` names, while Caddy reverse-proxies browser-facing services to their actual hosts and ports.
+
+```mermaid
+flowchart LR
+    Client["Client / Gram"]
+
+    subgraph LAN["Homelab LAN · 192.168.0.0/24"]
+        Router["Router<br/>192.168.0.1"]
+        PVE["Proxmox VE<br/>192.168.0.200<br/>HTTPS :8006"]
+        GPU["nixos-research<br/>192.168.0.201"]
+
+        subgraph DNSLXC["nixos-dns LXC · 192.168.0.202"]
+            AdGuard["AdGuard Home<br/>DNS :53<br/>Web UI :3000"]
+            Caddy["Caddy<br/>HTTPS :443"]
+        end
+
+        RStudio["RStudio Server<br/>192.168.0.203:8787"]
+    end
+
+    Cloudflare["Cloudflare DNS<br/>1.1.1.1 / 1.0.0.1"]
+
+    Client -. "DNS query" .-> AdGuard
+    AdGuard -. "non-local" .-> Cloudflare
+    AdGuard -. "router.home.arpa → .1" .-> Router
+    AdGuard -. "pve.home.arpa → .200" .-> PVE
+    AdGuard -. "gpu.home.arpa → .201" .-> GPU
+    AdGuard -. "dns / proxmox / r.home.arpa → .202" .-> Caddy
+
+    Client -->|"https://dns.home.arpa"| Caddy
+    Client -->|"https://proxmox.home.arpa"| Caddy
+    Client -->|"https://r.home.arpa"| Caddy
+
+    Caddy -->|"dns.home.arpa"| AdGuard
+    Caddy -->|"proxmox.home.arpa"| PVE
+    Caddy -->|"r.home.arpa"| RStudio
+```
+
+The naming scheme distinguishes host names from service names:
+
+| Name | Address | Meaning |
+| --- | --- | --- |
+| `router.home.arpa` | `192.168.0.1` | Router host |
+| `pve.home.arpa` | `192.168.0.200` | Proxmox host itself |
+| `gpu.home.arpa` | `192.168.0.201` | Research VM itself |
+| `dns.home.arpa` | `192.168.0.202` | AdGuard Home UI through Caddy |
+| `proxmox.home.arpa` | `192.168.0.202` | Proxmox web UI through Caddy |
+| `r.home.arpa` | `192.168.0.202` | RStudio Server through Caddy |
+
+`pve.home.arpa` and `proxmox.home.arpa` intentionally have different roles: the former identifies the Proxmox host directly, while the latter is the browser-friendly reverse-proxied web endpoint.
+
 ## Repository layout
 
 ```text

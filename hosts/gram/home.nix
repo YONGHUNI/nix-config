@@ -108,6 +108,43 @@ let
 
 in
 {
+  programs.ssh = {
+    enable = true;
+    enableDefaultConfig = false;
+
+    settings = {
+      "*" = {
+        ServerAliveInterval = 0;
+        ServerAliveCountMax = 3;
+        Compression = false;
+        AddKeysToAgent = "no";
+        HashKnownHosts = false;
+        ControlMaster = "no";
+        ControlPath = "~/.ssh/master-%r@%n:%p";
+        ControlPersist = "no";
+      };
+
+      pve = {
+        HostName = "pve.home.arpa";
+        User = "yonghun";
+      };
+
+      gpu = {
+        HostName = "gpu.home.arpa";
+        User = "yonghun";
+      };
+
+      dns = {
+        HostName = "dns.home.arpa";
+        User = "yonghun";
+      };
+
+      r = {
+        HostName = "192.168.0.203";
+        User = "yonghun";
+      };
+    };
+  };
   programs.plasma = {
     enable = true;
 

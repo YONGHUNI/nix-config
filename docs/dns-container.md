@@ -44,25 +44,103 @@ The current configuration provides:
 
 The Proxmox host remains responsible for creating the container, allocating resources, attaching it to the bridge, and assigning its address.
 
+## Network topology
+
+The DNS container has two distinct responsibilities:
+
+1. **AdGuard Home** resolves local `home.arpa` names and forwards non-local DNS queries upstream.
+2. **Caddy** terminates local HTTPS connections and reverse-proxies web applications to their actual service ports.
+
+```mermaid
+flowchart LR
+    Client["Client / Gram"]
+
+    subgraph LAN["Homelab LAN · 192.168.0.0/24"]
+        Router["Router<br/>192.168.0.1"]
+        PVE["Proxmox VE<br/>192.168.0.200<br/>HTTPS :8006"]
+        GPU["nixos-research<br/>192.168.0.201"]
+
+        subgraph DNSLXC["nixos-dns LXC · 192.168.0.202"]
+            AdGuard["AdGuard Home<br/>DNS :53<br/>Web UI :3000"]
+            Caddy["Caddy<br/>HTTPS :443"]
+        end
+
+        RStudio["RStudio Server<br/>192.168.0.203:8787"]
+    end
+
+    Cloudflare["Cloudflare DNS<br/>1.1.1.1 / 1.0.0.1"]
+
+    Client -. "DNS query" .-> AdGuard
+    AdGuard -. "non-local queries" .-> Cloudflare
+
+    AdGuard -. "router.home.arpa → .1" .-> Router
+    AdGuard -. "pve.home.arpa → .200" .-> PVE
+    AdGuard -. "gpu.home.arpa → .201" .-> GPU
+    AdGuard -. "dns / proxmox / r.home.arpa → .202" .-> Caddy
+
+    Client -->|"https://dns.home.arpa"| Caddy
+    Client -->|"https://proxmox.home.arpa"| Caddy
+    Client -->|"https://r.home.arpa"| Caddy
+
+    Caddy -->|"dns.home.arpa → http://127.0.0.1:3000"| AdGuard
+    Caddy -->|"proxmox.home.arpa → https://192.168.0.200:8006"| PVE
+    Caddy -->|"r.home.arpa → http://192.168.0.203:8787"| RStudio
+```
+
+Dashed arrows represent DNS resolution. Solid arrows represent application traffic after the client has resolved a name.
+
 ## Local DNS
 
 The current local names are:
 
-| Name | Address | Purpose |
+| Name | Address | Role |
 | --- | --- | --- |
-| `router.home.arpa` | `192.168.0.1` | Router |
-| `pve.home.arpa` | `192.168.0.200` | Proxmox host |
-| `gpu.home.arpa` | `192.168.0.201` | Research VM |
-| `dns.home.arpa` | `192.168.0.202` | AdGuard Home through Caddy |
+| `router.home.arpa` | `192.168.0.1` | Router host |
+| `pve.home.arpa` | `192.168.0.200` | Proxmox host itself |
+| `gpu.home.arpa` | `192.168.0.201` | Research VM itself |
+| `dns.home.arpa` | `192.168.0.202` | AdGuard Home web UI through Caddy |
 | `proxmox.home.arpa` | `192.168.0.202` | Proxmox web UI through Caddy |
+| `r.home.arpa` | `192.168.0.202` | RStudio Server through Caddy |
 
 [`home.arpa`](https://www.rfc-editor.org/rfc/rfc8375.html) is the special-use domain reserved for residential home networks.
 
 AdGuard Home listens on port 53 and forwards non-local queries to the configured upstream resolvers. Local names are generated from the `localHosts` attribute set in `hosts/nixos-dns/configuration.nix`.
 
+### Host names versus service names
+
+The naming scheme deliberately distinguishes a machine from a web service exposed through Caddy.
+
+```text
+pve.home.arpa
+    → 192.168.0.200
+    → Proxmox host itself
+    → useful for SSH, ping, and direct host access
+
+proxmox.home.arpa
+    → 192.168.0.202
+    → Caddy
+    → https://192.168.0.200:8006
+    → browser-friendly Proxmox web UI
+```
+
+Therefore `https://pve.home.arpa` is not expected to work on port 443. Direct Proxmox web access through the host name requires `https://pve.home.arpa:8006`, while the preferred browser endpoint is `https://proxmox.home.arpa`.
+
+The same distinction applies conceptually to `gpu.home.arpa`: it names the research VM itself rather than a reverse-proxied application.
+
 ## HTTPS reverse proxy
 
 Caddy fronts the web interfaces so they can be reached without explicit service ports:
+
+```mermaid
+flowchart LR
+    Browser["Browser"] --> Caddy["Caddy<br/>192.168.0.202:443"]
+
+    Caddy -->|"dns.home.arpa"| DNSUI["AdGuard Home<br/>127.0.0.1:3000"]
+    Caddy -->|"proxmox.home.arpa"| PVEUI["Proxmox VE<br/>192.168.0.200:8006"]
+    Caddy -->|"r.home.arpa"| RUI["RStudio Server<br/>192.168.0.203:8787"]
+```
+
+Equivalent request paths are:
 
 ```text
 https://dns.home.arpa
@@ -72,14 +150,16 @@ https://dns.home.arpa
 https://proxmox.home.arpa
     → Caddy
     → https://192.168.0.200:8006
+
+https://r.home.arpa
+    → Caddy
+    → http://192.168.0.203:8787
 ```
 
 Relevant Caddy documentation:
 
 - [`reverse_proxy`](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
 - [`tls internal`](https://caddyserver.com/docs/caddyfile/directives/tls)
-
-`pve.home.arpa` still resolves directly to the Proxmox host. `proxmox.home.arpa` is the Caddy-backed HTTPS name for the web interface.
 
 ## Local TLS
 
@@ -136,10 +216,24 @@ systemctl status sshd
 From a client using the homelab DNS resolver:
 
 ```bash
+getent hosts pve.home.arpa
 getent hosts dns.home.arpa
 getent hosts proxmox.home.arpa
-curl https://dns.home.arpa/
-curl https://proxmox.home.arpa/
+getent hosts r.home.arpa
+
+curl -kI https://pve.home.arpa:8006/
+curl -I https://dns.home.arpa/
+curl -I https://proxmox.home.arpa/
+curl -I https://r.home.arpa/
+```
+
+Expected DNS targets:
+
+```text
+pve.home.arpa      → 192.168.0.200
+proxmox.home.arpa  → 192.168.0.202
+dns.home.arpa      → 192.168.0.202
+r.home.arpa        → 192.168.0.202
 ```
 
 A full `nix flake check` evaluates the other hosts in this repository as well and is better run on a machine with more memory when needed.
@@ -162,6 +256,7 @@ The exact Proxmox container resources and lifecycle state remain outside this re
 
 - AdGuard Home's direct web port remains available in addition to `https://dns.home.arpa`.
 - The Proxmox reverse-proxy upstream currently uses `tls_insecure_skip_verify`, so Caddy encrypts the upstream connection but does not verify the Proxmox certificate. This should eventually be replaced with explicit trust of the Proxmox certificate or CA.
+- DNS and reverse proxy services share the same LXC, so loss of `nixos-dns` removes both local name resolution and Caddy-backed service entry points until the container recovers.
 
 ## Related documentation
 

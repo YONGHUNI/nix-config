@@ -11,9 +11,11 @@ This repository currently manages four environments:
 
 System configuration, hardware support, desktop applications, and general-purpose command-line tools belong in this repository.
 
-Project-specific runtimes and dependencies—such as Python or R versions, geospatial libraries, machine-learning frameworks, and project-specific CUDA toolkits—should be managed within each project's reproducible environment, preferably through a Nix flake and `devShell`.
+Project-specific runtimes and dependencies—such as Python or R versions, geospatial libraries, machine-learning frameworks, and project-specific CUDA toolkits—should be managed within each project's reproducible environment, preferably through a Nix flake/devShell, Pixi, or another project-local environment manager.
 
 System-level hardware configuration, including GPU drivers, remains in this repository.
+
+Shared interactive shell/editor behavior comes from the [`dotfiles`](https://github.com/YONGHUNI/dotfiles) flake input. The shared Bash prompt detects Nix, Pixi, Python/Conda, and Git context without auto-activating a project environment.
 
 ## Homelab topology
 
@@ -84,6 +86,7 @@ The naming scheme distinguishes host names from service names:
 │   ├── kakaotalk-bottles.md
 │   └── research-vm.md
 ├── home/
+│   ├── common.nix
 │   └── yonghun.nix
 ├── hosts/
 │   ├── gram/
@@ -150,13 +153,38 @@ See [Homelab architecture](docs/homelab.md), [Research VM](docs/research-vm.md),
 
 - NixOS-WSL
 - NixOS 25.11 package set retained
-- OpenSSH with Kerberos/GSSAPI support
-- Kerberos realm configuration for MPCDF
-- Automatic Nix store optimization
-- Automatic cleanup of generations older than seven days
-- Base command-line and development tools
-- Python, YAML, and Nix language tooling
+- Automatic Nix cleanup of generations older than seven days
+- General-purpose command-line tools
+- Python editor/lint tooling plus YAML and Nix tooling
 - `nrs` and `nrt` rebuild aliases
+- No institution-specific Kerberos/GSSAPI configuration
+
+The WSL host is intentionally generic. Institution-specific SSH, Kerberos, proxy, module, or cluster settings should be added only when a current environment actually requires them.
+
+## Shared shell and project environments
+
+`home/common.nix` links the shared Bash, Vim, and tmux configuration from the `dotfiles` input on Home Manager-managed hosts.
+
+The Bash prompt shows active environment context on the right side:
+
+- Nix development shells via `IN_NIX_SHELL`
+- Pixi environments via `PIXI_PROJECT_NAME` / `PIXI_ENVIRONMENT_NAME`
+- Python virtual environments via `VIRTUAL_ENV`
+- Conda environments via `CONDA_DEFAULT_ENV`
+- Git branch and working-tree counts
+
+When the terminal is too narrow to fit both sides, the environment/Git modules move automatically to a separate right-aligned line instead of colliding with the host/memory/timer section.
+
+Project environments are not auto-activated by the shared dotfiles. Enter them explicitly, for example:
+
+```bash
+nix develop
+pixi shell
+```
+
+For a named Nix-shell prompt label, a project can export `NIX_SHELL_NAME` from its own `shellHook`.
+
+A global `.Rprofile` is intentionally not deployed. R package/library paths should come from the active project environment (for example Nix, Pixi, or `renv`) rather than a shared `~/R/library`.
 
 ## Common commands
 
@@ -218,12 +246,19 @@ The configurations use separate nixpkgs inputs where required:
 
 - `nixpkgs`: NixOS 26.05 for the Gram, research VM, and DNS container
 - `nixpkgs-wsl`: NixOS 25.11 for WSL
+- `dotfiles`: shared Bash/Vim/tmux configuration
 
 Update all flake inputs with:
 
 ```bash
 cd ~/nix-config
 nix flake update
+```
+
+When only the shared shell/editor configuration changed, update just that input:
+
+```bash
+nix flake update dotfiles
 ```
 
 Review the lock-file changes before rebuilding:
@@ -300,18 +335,19 @@ sudo nixos-rebuild switch --flake .#wsl
 
 ## Home Manager
 
-Shared user packages and user-level configuration are managed in:
+Shared user dotfiles are managed in:
+
+```text
+home/common.nix
+```
+
+This links the Bash, Vim, and tmux files from the locked `dotfiles` input for the Gram, research VM, and DNS container.
+
+Shared user packages and the Fcitx5 input-method profile are managed in:
 
 ```text
 home/yonghun.nix
 ```
-
-This includes:
-
-- shared dotfiles
-- user-level command-line tools
-- the Fcitx5 input-method profile
-- the locally packaged HOP application
 
 LG Gram-specific Plasma configuration is managed in:
 
@@ -324,6 +360,7 @@ This includes:
 - the remapped touchpad hotkey
 - automatic touchpad discovery through KWin
 - touchpad LED synchronization
+- desktop applications specific to the Gram
 
 ## Documentation
 
@@ -355,6 +392,7 @@ Excluded:
 - Hypervisor-side ZFS, PCI passthrough, and virtual network configuration
 - Project-specific Python and R environments
 - Project-specific CUDA toolkits and machine-learning frameworks
+- Institution-specific Kerberos/SSH/cluster configuration that is no longer generally required
 - Large datasets
 - Private keys and credentials
 - Bottles and Wine prefix data
@@ -363,4 +401,4 @@ Excluded:
 
 ## Related repositories
 
-- [dotfiles](https://github.com/YONGHUNI/dotfiles): shared Bash, Vim, tmux, and R configuration
+- [dotfiles](https://github.com/YONGHUNI/dotfiles): shared Bash, Vim, and tmux configuration

@@ -15,7 +15,7 @@ Project-specific runtimes and dependencies—such as Python or R versions, geosp
 
 System-level hardware configuration, including GPU drivers, remains in this repository.
 
-Shared interactive shell/editor behavior comes from the [`dotfiles`](https://github.com/YONGHUNI/dotfiles) flake input. The shared Bash prompt detects Nix, Pixi, Python/Conda, and Git context without auto-activating a project environment.
+Shared interactive shell/editor behavior comes from the [`dotfiles`](https://github.com/YONGHUNI/dotfiles) flake input. The shared Bash prompt detects interactive `nix shell`, `nix develop`, Pixi, Python/Conda, and Git context without auto-activating a project environment.
 
 ## Homelab topology
 
@@ -167,22 +167,30 @@ The WSL host is intentionally generic. Institution-specific SSH, Kerberos, proxy
 
 The Bash prompt shows active environment context on the right side:
 
-- Nix development shells via `IN_NIX_SHELL`
-- Pixi environments via `PIXI_PROJECT_NAME` / `PIXI_ENVIRONMENT_NAME`
-- Python virtual environments via `VIRTUAL_ENV`
-- Conda environments via `CONDA_DEFAULT_ENV`
+- interactive `nix shell` as ` nix:shell`
+- `nix develop` as ` nix:dev`, or ` nix:<name>` when `NIX_SHELL_NAME` is exported by the project
+- Pixi as ` pixi:<project>`
+- Python virtual environments as ` <venv>`
+- Conda environments as ` <environment>`
 - Git branch and working-tree counts
+
+Nested Nix and Pixi contexts are grouped together, for example:
+
+```text
+  nix:dev +  pixi:my-project   main ~1
+```
+
+Interactive `nix shell` needs a small Bash wrapper because, unlike `nix develop`, it does not expose a dedicated prompt marker. The wrapper only marks an interactive `nix shell`; `nix shell ... -c ...` and other Nix subcommands are passed through normally.
 
 When the terminal is too narrow to fit both sides, the environment/Git modules move automatically to a separate right-aligned line instead of colliding with the host/memory/timer section.
 
 Project environments are not auto-activated by the shared dotfiles. Enter them explicitly, for example:
 
 ```bash
+nix shell nixpkgs#python3
 nix develop
 pixi shell
 ```
-
-For a named Nix-shell prompt label, a project can export `NIX_SHELL_NAME` from its own `shellHook`.
 
 A global `.Rprofile` is intentionally not deployed. R package/library paths should come from the active project environment (for example Nix, Pixi, or `renv`) rather than a shared `~/R/library`.
 

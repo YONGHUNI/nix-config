@@ -14,18 +14,14 @@
     options = "--delete-older-than 7d";
   };
 
-  # Use OpenSSH with Kerberos/GSSAPI support
-  programs.ssh.package = pkgs.opensshWithKerberos;
-
   # Shell aliases
   programs.bash.shellAliases = {
     nrs = "sudo nixos-rebuild switch --flake ~/nix-config#wsl";
     nrt = "sudo nixos-rebuild test --flake ~/nix-config#wsl";
   };
 
-  # System packages
+  # General-purpose tools only. Project runtimes belong in project-local environments.
   environment.systemPackages = with pkgs; [
-    # Core
     vim
     tmux
     git
@@ -36,50 +32,14 @@
     wget
     unzip
 
-    # Python
-    python3
+    # Editor / lint tooling
     pyright
     black
-
-    # YAML
     yaml-language-server
-
-    # Nix
     nil
     statix
     nixpkgs-fmt
   ];
-
-  # Kerberos for MPCDF GSSAPI authentication
-  security.krb5 = {
-    enable = true;
-    settings = {
-      libdefaults = {
-        default_realm = "IPP-GARCHING.MPG.DE";
-        forwardable = true;
-      };
-      realms."IPP-GARCHING.MPG.DE" = {
-        kdc = [
-          "kerberos.rzg.mpg.de"
-          "kerberos1.rzg.mpg.de"
-          "kerberos2.rzg.mpg.de"
-          "kerberos3.rzg.mpg.de"
-        ];
-        admin_server = "kerberos1.rzg.mpg.de";
-        default_domain = "rzg.mpg.de";
-      };
-      domain_realm = {
-        "mpcdf.mpg.de" = "IPP-GARCHING.MPG.DE";
-        ".mpcdf.mpg.de" = "IPP-GARCHING.MPG.DE";
-        "rzg.mpg.de" = "IPP-GARCHING.MPG.DE";
-        ".rzg.mpg.de" = "IPP-GARCHING.MPG.DE";
-        "ipp.mpg.de" = "IPP-GARCHING.MPG.DE";
-        ".ipp.mpg.de" = "IPP-GARCHING.MPG.DE";
-        "ipp-garching.mpg.de" = "IPP-GARCHING.MPG.DE";
-        ".ipp-garching.mpg.de" = "IPP-GARCHING.MPG.DE";
-      };
-    };
-  };
 
   system.stateVersion = "25.11";
 }

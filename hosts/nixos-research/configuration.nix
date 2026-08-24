@@ -36,6 +36,10 @@
     modesetting.enable = true;
   };
 
+  # Expose the host NVIDIA userspace driver libraries to external runtimes
+  # such as Pixi/Conda environments (PyTorch, ONNX Runtime, etc.).
+  environment.sessionVariables.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
+
   # Persistent data disk
   fileSystems."/data" = {
     device = "/dev/disk/by-uuid/5d533a52-7f82-4b6a-8a5a-bd163f50f482";

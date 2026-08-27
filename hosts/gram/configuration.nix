@@ -184,6 +184,9 @@
   # Install firefox.
   programs.firefox.enable = true;
 
+  # Support dynamically linked binaries from Pixi/Conda.
+  programs.nix-ld.enable = true;
+
   # nix gc settings
   nix = {
     gc = {

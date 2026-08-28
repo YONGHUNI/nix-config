@@ -134,6 +134,7 @@
               home-manager.users.yonghun = {
                 imports = [
                   ./home/common.nix
+                  ./home/positron-pixi-nix-shim.nix
                 ];
 
                 home.username = "yonghun";

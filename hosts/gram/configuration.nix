@@ -10,6 +10,7 @@
     ./hardware-configuration.nix
 
     ../../modules/nixos/laptop.nix
+    ../../modules/nixos/pixi-conda-compat.nix
   ];
 
   # Bootloader.
@@ -183,15 +184,6 @@
 
   # Install firefox.
   programs.firefox.enable = true;
-
-  # Support dynamically linked binaries from Pixi/Conda.
-  programs.nix-ld.enable = true;
-
-  # conda-forge R hard-codes /usr/bin/which in Sys.which().
-  systemd.tmpfiles.rules = [
-    "d /usr/bin 0755 root root -"
-    "L+ /usr/bin/which - - - - ${pkgs.which}/bin/which"
-  ];
 
   # nix gc settings
   nix = {

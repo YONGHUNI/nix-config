@@ -104,6 +104,7 @@
                   plasma-manager.homeModules.plasma-manager
                   ./home/common.nix
                   ./home/yonghun.nix
+                  ./home/positron-pixi-nix-shim.nix
                   ./hosts/gram/home.nix
                 ];
               };

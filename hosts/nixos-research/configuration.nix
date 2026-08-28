@@ -8,6 +8,7 @@
 {
   imports = [
     ./hardware-configuration.nix
+    ../../modules/nixos/pixi-conda-compat.nix
   ];
 
   # UEFI boot
@@ -22,9 +23,6 @@
   services.openssh.enable = true;
   services.openssh.settings.PermitRootLogin = "no";
   services.openssh.settings.PasswordAuthentication = false;
-
-  # Compatibility for generic dynamically linked Linux binaries
-  programs.nix-ld.enable = true;
 
   # NVIDIA GPU
   boot.blacklistedKernelModules = [ "nouveau" ];

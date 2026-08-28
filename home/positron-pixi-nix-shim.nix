@@ -14,7 +14,10 @@ let
     ];
 
     text = ''
-      project_dir="$PWD"
+      # Canonicalize the working directory because Nix path: inputs reject
+      # paths whose intermediate components are symlinks (for example ~/data
+      # pointing at /data/<user> on a research host).
+      project_dir="$(pwd -P)"
 
       # Positron uses --manifest-path when activating an already-discovered
       # Pixi environment. Prefer that path when available because activation
@@ -50,6 +53,9 @@ let
         echo "pixi-nix-shim: no flake.nix found from $project_dir upward" >&2
         exit 127
       fi
+
+      # Resolve any remaining symlinks before passing the flake root to Nix.
+      flake_root="$(realpath "$flake_root")"
 
       # Guard against accidental recursion if a devShell does not provide
       # Pixi and this shim is also present on that shell's PATH.

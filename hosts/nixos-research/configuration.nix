@@ -67,6 +67,8 @@
     vim
     tmux
     curl
+    htop
+    bat
   ];
 
   # We will use flakes for system/project configuration.

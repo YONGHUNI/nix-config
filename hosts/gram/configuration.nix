@@ -37,8 +37,17 @@
   hardware.bluetooth = {
     enable = true;
     powerOnBoot = true;
-  };
 
+    settings = {
+      Policy = {
+        ReconnectUUIDs = "00001112-0000-1000-8000-00805f9b34fb,0000111f-0000-1000-8000-00805f9b34fb,0000110a-0000-1000-8000-00805f9b34fb,0000110b-0000-1000-8000-00805f9b34fb,00001124-0000-1000-8000-00805f9b34fb";
+
+        ReconnectAttempts = 7;
+
+        ReconnectIntervals = "1,2,4,8,16,32,64";
+      };
+    };
+  };
   # Firmware updates through LVFS
   services.fwupd.enable = true;
 

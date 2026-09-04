@@ -65,7 +65,7 @@ let
       fi
       export PIXI_NIX_SHIM_ACTIVE=1
 
-      exec nix develop "path:$flake_root" -c pixi "$@"
+      exec nix develop "$flake_root" -c pixi "$@"
     '';
   };
 in

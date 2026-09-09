@@ -217,6 +217,7 @@
 
     wireguard-tools
     openconnect
+    (pkgs.callPackage ../../pkgs/openconnect-saml { })
 
   ];
 

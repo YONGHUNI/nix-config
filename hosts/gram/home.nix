@@ -143,6 +143,15 @@ in
         HostName = "192.168.0.203";
         User = "yonghun";
       };
+      casper = {
+        HostName = "casper.hpc.ucar.edu";
+        User = "yonghunsuh";
+      };
+      vl = {
+        HostName = "172.18.213.232";
+        User = "ys01849";
+      };
+
     };
   };
   programs.plasma = {

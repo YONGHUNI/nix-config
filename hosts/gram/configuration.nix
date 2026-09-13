@@ -33,6 +33,14 @@
   # Hardware firmware and Intel CPU microcode
   hardware.enableRedistributableFirmware = true;
 
+  hardware.graphics = {
+    enable = true;
+
+    extraPackages = with pkgs; [
+      intel-media-driver
+    ];
+  };
+
   # Bluetooth
   hardware.bluetooth = {
     enable = true;

@@ -10,7 +10,8 @@ The infrastructure is split into layers. Proxmox manages the physical machine, v
 
 ```mermaid
 flowchart LR
-    Client["Client / Gram"]
+    Client["Remote client / Gram"]
+    WG["WireGuard tunnel<br/>endpoint details omitted"]
 
     subgraph LAN["Homelab LAN · 192.168.0.0/24"]
         Router["Router<br/>192.168.0.1"]
@@ -27,23 +28,27 @@ flowchart LR
 
     Cloudflare["Cloudflare DNS<br/>1.1.1.1 / 1.0.0.1"]
 
-    Client -. "DNS query" .-> AdGuard
-    AdGuard -. "non-local" .-> Cloudflare
+    Client -->|"encrypted remote access"| WG
+
+    WG -. "DNS · UDP/TCP 53" .-> AdGuard
+    WG -->|"HTTPS :443"| Caddy
+    WG -->|"SSH / internal access"| GPU
+    WG -->|"internal access"| PVE
+
+    AdGuard -. "non-local DNS" .-> Cloudflare
     AdGuard -. "router.home.arpa → .1" .-> Router
     AdGuard -. "pve.home.arpa → .200" .-> PVE
     AdGuard -. "gpu.home.arpa → .201" .-> GPU
     AdGuard -. "dns / proxmox / r.home.arpa → .202" .-> Caddy
-
-    Client -->|"https://dns.home.arpa"| Caddy
-    Client -->|"https://proxmox.home.arpa"| Caddy
-    Client -->|"https://r.home.arpa"| Caddy
 
     Caddy -->|"dns.home.arpa → :3000"| AdGuard
     Caddy -->|"proxmox.home.arpa → :8006"| PVE
     Caddy -->|"r.home.arpa → :8787"| RStudio
 ```
 
-Dashed arrows represent DNS resolution. Solid arrows represent application traffic after a name has been resolved. The RStudio host is an on-demand service and is not expected to be online continuously.
+Remote access from the Gram to the homelab is carried over WireGuard. DNS requests for local `home.arpa` names and application traffic destined for the homelab traverse the tunnel. WireGuard endpoint, tunnel addressing, and implementation details are intentionally omitted from this document.
+
+The RStudio host is an on-demand service and is not expected to be online continuously.
 
 The managed homelab guests are exposed by two flake outputs:
 
@@ -141,7 +146,9 @@ When troubleshooting:
 
 The managed guests attach to the homelab network through Proxmox virtual networking rather than an additional guest NAT layer.
 
-Remote-access transport, router configuration, VPN access, Wake-on-LAN, and Proxmox host management remain infrastructure concerns outside this repository.
+Remote access from the Gram uses WireGuard. Endpoint, tunnel addressing, and implementation details are intentionally omitted. Wake-on-LAN and hypervisor-side network configuration remain infrastructure concerns outside this repository.
+
+For remote access, DNS requests for local `home.arpa` names are sent to AdGuard Home through the WireGuard tunnel. After name resolution, application traffic uses the returned internal address and also traverses the tunnel.
 
 The current local names are:
 
@@ -150,7 +157,7 @@ The current local names are:
 | `router.home.arpa` | `192.168.0.1` | Router |
 | `pve.home.arpa` | `192.168.0.200` | Proxmox host |
 | `gpu.home.arpa` | `192.168.0.201` | Research VM |
-| `dns.home.arpa` | `192.168.0.202` | AdGuard Home through Caddy |
+| `dns.home.arpa` | `192.168.0.202` | AdGuard Home web UI through Caddy |
 | `proxmox.home.arpa` | `192.168.0.202` | Proxmox web UI through Caddy |
 | `r.home.arpa` | `192.168.0.202` | RStudio Server through Caddy; backend at `192.168.0.203:8787` is on demand |
 

@@ -13,6 +13,38 @@
     ../../modules/nixos/pixi-conda-compat.nix
   ];
 
+  nixpkgs.overlays = [
+    (final: prev: {
+      openconnect = prev.openconnect.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [
+          ../../patches/openconnect-no-external-auth.patch
+        ];
+      });
+
+      networkmanager-openconnect = prev.networkmanager-openconnect.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [
+          ../../patches/networkmanager-openconnect-no-external-auth.patch
+        ];
+
+        buildInputs = (old.buildInputs or [ ]) ++ [
+          final.openconnect
+        ];
+      });
+
+      kdePackages = prev.kdePackages // {
+        plasma-nm = prev.kdePackages.plasma-nm.overrideAttrs (old: {
+          patches = (old.patches or [ ]) ++ [
+            ../../patches/plasma-nm-openconnect-no-external-auth.patch
+          ];
+
+          buildInputs = (old.buildInputs or [ ]) ++ [
+            final.openconnect
+          ];
+        });
+      };
+    })
+  ];
+
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
@@ -72,6 +104,42 @@
   networking.networkmanager.plugins = with pkgs; [
     networkmanager-openconnect
   ];
+
+  # UGA OpenConnect VPN profile; use non-browser auth and a Cisco-compatible user agent
+  networking.networkmanager.ensureProfiles.profiles."UGA VPN" = {
+    connection = {
+      id = "UGA VPN";
+      type = "vpn";
+      autoconnect = false;
+    };
+
+    ipv4.method = "auto";
+    ipv6.method = "auto";
+
+    vpn = {
+      service-type = "org.freedesktop.NetworkManager.openconnect";
+
+      gateway = "remote.uga.edu";
+      protocol = "anyconnect";
+
+      # Required for UGA's Cisco ASA authentication flow
+      no-external-auth = "yes";
+      useragent = "AnyConnect-compatible OpenConnect VPN Agent v9.12-unknown";
+
+      cookie-flags = 2;
+      gateway-flags = 2;
+      gwcert-flags = 2;
+
+      enable_csd_trojan = "no";
+      pem_passphrase_fsid = "no";
+      prevent_invalid_cert = "no";
+
+      stoken_source = "disabled";
+      stoken_string-flags = 0;
+    };
+
+    proxy.method = "none";
+  };
 
   security.pki.certificateFiles = [
     ../../certs/caddy-root.crt

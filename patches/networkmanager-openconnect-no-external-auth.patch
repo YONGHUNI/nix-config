@@ -1,0 +1,40 @@
+--- a/shared/nm-service-defines.h
++++ b/shared/nm-service-defines.h
+@@ -46,6 +46,7 @@
+ #define NM_OPENCONNECT_KEY_DISABLE_UDP "disable_udp"
+ #define NM_OPENCONNECT_KEY_PROTOCOL "protocol"
+ #define NM_OPENCONNECT_KEY_PROXY "proxy"
++#define NM_OPENCONNECT_KEY_NO_EXTERNAL_AUTH "no-external-auth"
+ #define NM_OPENCONNECT_KEY_CSD_ENABLE "enable_csd_trojan"
+ #define NM_OPENCONNECT_KEY_USERAGENT "useragent"
+ #define NM_OPENCONNECT_KEY_CSD_WRAPPER "csd_wrapper"
+--- a/src/nm-openconnect-service.c
++++ b/src/nm-openconnect-service.c
+@@ -91,6 +91,7 @@
+ 	{ NM_OPENCONNECT_KEY_DISABLE_UDP, G_TYPE_BOOLEAN, 0, 0 },
+ 	{ NM_OPENCONNECT_KEY_PROTOCOL,    G_TYPE_STRING, 0, 0 },
+ 	{ NM_OPENCONNECT_KEY_PROXY,       G_TYPE_STRING, 0, 0 },
++	{ NM_OPENCONNECT_KEY_NO_EXTERNAL_AUTH, G_TYPE_BOOLEAN, 0, 0 },
+ 	{ NM_OPENCONNECT_KEY_CSD_ENABLE,  G_TYPE_BOOLEAN, 0, 0 },
+ 	{ NM_OPENCONNECT_KEY_CSD_WRAPPER, G_TYPE_STRING, 0, 0 },
+ 	{ NM_OPENCONNECT_KEY_TOKEN_MODE,  G_TYPE_STRING, 0, 0 },
+--- a/auth-dialog/main.c
++++ b/auth-dialog/main.c
+@@ -1887,6 +1887,7 @@
+ static auth_ui_data *init_ui_data (char *vpn_name, GHashTable *options, GHashTable *secrets, char *vpn_uuid)
+ {
+ 	char *vpn_useragent = g_hash_table_lookup(options, NM_OPENCONNECT_KEY_USERAGENT);
++	char *no_external_auth = g_hash_table_lookup(options, NM_OPENCONNECT_KEY_NO_EXTERNAL_AUTH);
+ 	auth_ui_data *ui_data;
+ 
+ 	ui_data = g_slice_new0(auth_ui_data);
+@@ -1926,6 +1927,9 @@
+ 							   nm_process_auth_form, write_progress,
+ 							   ui_data);
+ 
++	if (no_external_auth && !strcmp(no_external_auth, "yes"))
++		openconnect_set_no_external_auth(ui_data->vpninfo);
++
+ #if OPENCONNECT_CHECK_VER(5,8)
+ 	/* The useragent provided to openconnect_vpninfo_new() gets the
+ 	 * OpenConnect version appended to it. But some servers need the

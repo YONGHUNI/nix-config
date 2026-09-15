@@ -1,0 +1,26 @@
+diff --git a/vpn/openconnect/nm-openconnect-service.h b/vpn/openconnect/nm-openconnect-service.h
+--- a/vpn/openconnect/nm-openconnect-service.h
++++ b/vpn/openconnect/nm-openconnect-service.h
+@@ -29,6 +29,7 @@
+ #define NM_OPENCONNECT_KEY_PREVENT_INVALID_CERT "prevent_invalid_cert"
+ #define NM_OPENCONNECT_KEY_PROTOCOL "protocol"
+ #define NM_OPENCONNECT_KEY_PROXY "proxy"
++#define NM_OPENCONNECT_KEY_NO_EXTERNAL_AUTH "no-external-auth"
+ #define NM_OPENCONNECT_KEY_USERAGENT "useragent"
+ #define NM_OPENCONNECT_KEY_VERSION_STRING "version_string"
+ #define NM_OPENCONNECT_KEY_CSD_ENABLE "enable_csd_trojan"
+
+diff --git a/vpn/openconnect/openconnectauth.cpp b/vpn/openconnect/openconnectauth.cpp
+--- a/vpn/openconnect/openconnectauth.cpp
++++ b/vpn/openconnect/openconnectauth.cpp
+@@ -212,6 +212,10 @@ void OpenconnectAuthWidget::readConfig()
+         const QByteArray proxy = dataMap[NM_OPENCONNECT_KEY_PROXY].toUtf8();
+         openconnect_set_http_proxy(d->vpninfo, OC3DUP(proxy.data()));
+     }
++
++    if (dataMap[NM_OPENCONNECT_KEY_NO_EXTERNAL_AUTH] == "yes")
++        openconnect_set_no_external_auth(d->vpninfo);
++
+ #if OPENCONNECT_CHECK_VER(5, 8)
+     if (!dataMap[NM_OPENCONNECT_KEY_USERAGENT].isEmpty()) {
+         const QByteArray useragent = dataMap[NM_OPENCONNECT_KEY_USERAGENT].toUtf8();

@@ -1,0 +1,29 @@
+diff --git a/libopenconnect.map.in b/libopenconnect.map.in
+--- a/libopenconnect.map.in
++++ b/libopenconnect.map.in
+@@ -133,1 +133,6 @@
++OPENCONNECT_5_10 {
++ global:
++        openconnect_set_no_external_auth;
++} OPENCONNECT_5_9;
++
+ OPENCONNECT_PRIVATE {
+diff --git a/library.c b/library.c
+--- a/library.c
++++ b/library.c
+@@ -1929,1 +1929,8 @@
+ }
++
++void openconnect_set_no_external_auth(struct openconnect_info *vpninfo)
++{
++        if (!vpninfo)
++                return;
++        vpninfo->no_external_auth = 1;
++}
+diff --git a/openconnect.h b/openconnect.h
+--- a/openconnect.h
++++ b/openconnect.h
+@@ -796,1 +796,3 @@
+ void openconnect_set_loglevel(struct openconnect_info *vpninfo, int level);
++
++void openconnect_set_no_external_auth(struct openconnect_info *vpninfo);

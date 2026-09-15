@@ -8,23 +8,42 @@ The infrastructure is split into layers. Proxmox manages the physical machine, v
 
 ## Architecture
 
-```text
-Physical server
-└── Proxmox VE
-    ├── virtual networking
-    ├── VM/LXC storage
-    ├── PCIe / GPU passthrough
-    ├── NixOS research VM (`nixos-research`)
-    │   ├── NVIDIA GPU driver
-    │   ├── SSH access
-    │   ├── persistent `/data` mount
-    │   └── research workspace
-    └── NixOS DNS LXC (`nixos-dns`)
-        ├── AdGuard Home
-        │   └── local `home.arpa` DNS
-        └── Caddy
-            └── HTTPS reverse proxy
+```mermaid
+flowchart LR
+    Client["Client / Gram"]
+
+    subgraph LAN["Homelab LAN · 192.168.0.0/24"]
+        Router["Router<br/>192.168.0.1"]
+        PVE["Proxmox VE<br/>192.168.0.200<br/>HTTPS :8006"]
+        GPU["nixos-research<br/>192.168.0.201"]
+
+        subgraph DNSLXC["nixos-dns LXC · 192.168.0.202"]
+            AdGuard["AdGuard Home<br/>DNS :53<br/>Web UI :3000"]
+            Caddy["Caddy<br/>HTTPS :443"]
+        end
+
+        RStudio["RStudio Server<br/>192.168.0.203:8787<br/>(on demand)"]
+    end
+
+    Cloudflare["Cloudflare DNS<br/>1.1.1.1 / 1.0.0.1"]
+
+    Client -. "DNS query" .-> AdGuard
+    AdGuard -. "non-local" .-> Cloudflare
+    AdGuard -. "router.home.arpa → .1" .-> Router
+    AdGuard -. "pve.home.arpa → .200" .-> PVE
+    AdGuard -. "gpu.home.arpa → .201" .-> GPU
+    AdGuard -. "dns / proxmox / r.home.arpa → .202" .-> Caddy
+
+    Client -->|"https://dns.home.arpa"| Caddy
+    Client -->|"https://proxmox.home.arpa"| Caddy
+    Client -->|"https://r.home.arpa"| Caddy
+
+    Caddy -->|"dns.home.arpa → :3000"| AdGuard
+    Caddy -->|"proxmox.home.arpa → :8006"| PVE
+    Caddy -->|"r.home.arpa → :8787"| RStudio
 ```
+
+Dashed arrows represent DNS resolution. Solid arrows represent application traffic after a name has been resolved. The RStudio host is an on-demand service and is not expected to be online continuously.
 
 The managed homelab guests are exposed by two flake outputs:
 
@@ -133,6 +152,7 @@ The current local names are:
 | `gpu.home.arpa` | `192.168.0.201` | Research VM |
 | `dns.home.arpa` | `192.168.0.202` | AdGuard Home through Caddy |
 | `proxmox.home.arpa` | `192.168.0.202` | Proxmox web UI through Caddy |
+| `r.home.arpa` | `192.168.0.202` | RStudio Server through Caddy; backend at `192.168.0.203:8787` is on demand |
 
 SSH on the NixOS guests uses public-key authentication with root login and password authentication disabled.
 

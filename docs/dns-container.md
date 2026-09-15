@@ -48,12 +48,15 @@ The Proxmox host remains responsible for creating the container, allocating reso
 
 The DNS container has two distinct responsibilities:
 
-1. **AdGuard Home** resolves local `home.arpa` names and forwards non-local DNS queries upstream.
+1. **AdGuard Home** resolves local `home.arpa` names on DNS port 53 and forwards non-local DNS queries upstream.
 2. **Caddy** terminates local HTTPS connections and reverse-proxies web applications to their actual service ports.
+
+For remote access from the Gram, both DNS requests for local names and subsequent application traffic traverse WireGuard. The WireGuard endpoint, tunnel addressing, and implementation details are intentionally omitted from this document.
 
 ```mermaid
 flowchart LR
-    Client["Client / Gram"]
+    Client["Remote client / Gram"]
+    WG["WireGuard tunnel<br/>endpoint details omitted"]
 
     subgraph LAN["Homelab LAN · 192.168.0.0/24"]
         Router["Router<br/>192.168.0.1"]
@@ -65,29 +68,28 @@ flowchart LR
             Caddy["Caddy<br/>HTTPS :443"]
         end
 
-        RStudio["RStudio Server<br/>192.168.0.203:8787"]
+        RStudio["RStudio Server<br/>192.168.0.203:8787<br/>(on demand)"]
     end
 
     Cloudflare["Cloudflare DNS<br/>1.1.1.1 / 1.0.0.1"]
 
-    Client -. "DNS query" .-> AdGuard
-    AdGuard -. "non-local queries" .-> Cloudflare
+    Client -->|"encrypted remote access"| WG
 
-    AdGuard -. "router.home.arpa → .1" .-> Router
-    AdGuard -. "pve.home.arpa → .200" .-> PVE
-    AdGuard -. "gpu.home.arpa → .201" .-> GPU
-    AdGuard -. "dns / proxmox / r.home.arpa → .202" .-> Caddy
+    WG -. "DNS · UDP/TCP 53" .-> AdGuard
+    WG -->|"HTTPS :443"| Caddy
+    WG -->|"SSH / internal access"| GPU
+    WG -->|"internal access"| PVE
 
-    Client -->|"https://dns.home.arpa"| Caddy
-    Client -->|"https://proxmox.home.arpa"| Caddy
-    Client -->|"https://r.home.arpa"| Caddy
+    AdGuard -. "non-local DNS" .-> Cloudflare
 
-    Caddy -->|"dns.home.arpa → http://127.0.0.1:3000"| AdGuard
-    Caddy -->|"proxmox.home.arpa → https://192.168.0.200:8006"| PVE
-    Caddy -->|"r.home.arpa → http://192.168.0.203:8787"| RStudio
+    Caddy -->|"dns.home.arpa → :3000"| AdGuard
+    Caddy -->|"proxmox.home.arpa → :8006"| PVE
+    Caddy -->|"r.home.arpa → :8787"| RStudio
 ```
 
-Dashed arrows represent DNS resolution. Solid arrows represent application traffic after the client has resolved a name.
+DNS and HTTPS are separate flows. A request for a local name such as `gpu.home.arpa` first goes to AdGuard Home over DNS port 53. AdGuard returns the configured internal address, and the client then connects to that address using the relevant application protocol. For a remote client, both steps traverse the WireGuard tunnel.
+
+`https://dns.home.arpa` is the AdGuard Home **web interface** exposed through Caddy. It is not DNS-over-HTTPS; normal DNS resolution uses port 53 directly.
 
 ## Local DNS
 
@@ -105,6 +107,18 @@ The current local names are:
 [`home.arpa`](https://www.rfc-editor.org/rfc/rfc8375.html) is the special-use domain reserved for residential home networks.
 
 AdGuard Home listens on port 53 and forwards non-local queries to the configured upstream resolvers. Local names are generated from the `localHosts` attribute set in `hosts/nixos-dns/configuration.nix`.
+
+For example, resolving and connecting to the research VM follows this sequence:
+
+```text
+client
+  → DNS query for gpu.home.arpa
+  → AdGuard Home at 192.168.0.202:53
+  → DNS response: 192.168.0.201
+  → application connects to 192.168.0.201
+```
+
+For a remote client, the DNS query, DNS response, and subsequent application traffic remain inside the WireGuard tunnel while crossing the remote network.
 
 ### Host names versus service names
 
@@ -137,7 +151,7 @@ flowchart LR
 
     Caddy -->|"dns.home.arpa"| DNSUI["AdGuard Home<br/>127.0.0.1:3000"]
     Caddy -->|"proxmox.home.arpa"| PVEUI["Proxmox VE<br/>192.168.0.200:8006"]
-    Caddy -->|"r.home.arpa"| RUI["RStudio Server<br/>192.168.0.203:8787"]
+    Caddy -->|"r.home.arpa"| RUI["RStudio Server<br/>192.168.0.203:8787<br/>(on demand)"]
 ```
 
 Equivalent request paths are:
@@ -155,6 +169,8 @@ https://r.home.arpa
     → Caddy
     → http://192.168.0.203:8787
 ```
+
+The first path above is only for the AdGuard Home web interface. DNS requests themselves do not pass through Caddy.
 
 Relevant Caddy documentation:
 
@@ -192,7 +208,9 @@ PermitRootLogin = no
 PasswordAuthentication = false
 ```
 
-VPN routing and router-side DNS distribution are outside the container configuration. Remote clients must be able to route to `192.168.0.202` and use it as a DNS resolver for `home.arpa` names.
+Remote access from the Gram uses WireGuard. Endpoint, tunnel addressing, and implementation details are intentionally omitted. DNS requests for local `home.arpa` names are sent through the tunnel to AdGuard Home, and subsequent application traffic uses the returned internal address through the same tunnel.
+
+Wake-on-LAN and hypervisor-side network configuration remain infrastructure concerns outside this repository.
 
 ## Rebuild workflow
 

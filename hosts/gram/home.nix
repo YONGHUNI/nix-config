@@ -151,6 +151,10 @@ in
         HostName = "172.18.213.232";
         User = "ys01849";
       };
+      sapelo = {
+        HostName = "sapelo2.gacrc.uga.edu";
+        User = "ys01849";
+      };
 
     };
   };

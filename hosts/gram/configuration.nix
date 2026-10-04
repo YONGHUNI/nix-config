@@ -119,12 +119,11 @@
         [ "$interface" = "homewg" ] || exit 0
 
         case "$action" in
-          up|dhcp4-change|dhcp6-change)
-            ${pkgs.systemd}/bin/resolvectl dns "$interface" 192.168.0.202
-            ${pkgs.systemd}/bin/resolvectl domain "$interface" '~home.arpa'
-            ${pkgs.systemd}/bin/resolvectl default-route "$interface" no
+          up|dhcp4-change|dhcp6-change|vpn-up)
+            # Run after NetworkManager has published the profile DNS state.
+            ${pkgs.systemd}/bin/systemctl restart homewg-split-dns.service
             ;;
-          down)
+          down|vpn-down)
             ${pkgs.systemd}/bin/resolvectl revert "$interface" || true
             ;;
         esac
@@ -145,8 +144,14 @@
     wants = [ "systemd-resolved.service" ];
     wantedBy = [ "multi-user.target" ];
     unitConfig.ConditionPathExists = "/sys/class/net/homewg";
-    serviceConfig.Type = "oneshot";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStartPre = "${pkgs.coreutils}/bin/sleep 1";
+    };
     script = ''
+      # NetworkManager may first publish DNS settings from the persistent
+      # homewg profile. Replace the link-scoped resolved state after that
+      # update so only the homelab namespace is routed through this link.
       ${pkgs.systemd}/bin/resolvectl dns homewg 192.168.0.202
       ${pkgs.systemd}/bin/resolvectl domain homewg '~home.arpa'
       ${pkgs.systemd}/bin/resolvectl default-route homewg no

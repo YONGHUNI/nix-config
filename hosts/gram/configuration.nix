@@ -101,6 +101,58 @@
   # Enable networking
   networking.networkmanager.enable = true;
 
+  # Use a routing-aware resolver so homelab DNS remains independent from
+  # DNS servers installed by Wi-Fi or VPN connections.
+  services.resolved.enable = true;
+
+  # Keep *.home.arpa on the homelab DNS resolver whenever homewg is active.
+  # The WireGuard profile itself intentionally remains outside this public
+  # repository because it contains endpoint/key material.
+  networking.networkmanager.dispatcherScripts = [
+    {
+      source = pkgs.writeShellScript "homewg-split-dns" ''
+        set -eu
+
+        interface="''${1:-}"
+        action="''${2:-}"
+
+        [ "$interface" = "homewg" ] || exit 0
+
+        case "$action" in
+          up|dhcp4-change|dhcp6-change)
+            ${pkgs.systemd}/bin/resolvectl dns "$interface" 192.168.0.202
+            ${pkgs.systemd}/bin/resolvectl domain "$interface" '~home.arpa'
+            ${pkgs.systemd}/bin/resolvectl default-route "$interface" no
+            ;;
+          down)
+            ${pkgs.systemd}/bin/resolvectl revert "$interface" || true
+            ;;
+        esac
+      '';
+      type = "basic";
+    }
+  ];
+
+  # A dispatcher event is not emitted merely because nixos-rebuild changes
+  # the script while homewg is already up. Apply the same policy once at
+  # activation/boot when the interface already exists.
+  systemd.services.homewg-split-dns = {
+    description = "Apply split DNS for the homelab WireGuard link";
+    after = [
+      "NetworkManager.service"
+      "systemd-resolved.service"
+    ];
+    wants = [ "systemd-resolved.service" ];
+    wantedBy = [ "multi-user.target" ];
+    unitConfig.ConditionPathExists = "/sys/class/net/homewg";
+    serviceConfig.Type = "oneshot";
+    script = ''
+      ${pkgs.systemd}/bin/resolvectl dns homewg 192.168.0.202
+      ${pkgs.systemd}/bin/resolvectl domain homewg '~home.arpa'
+      ${pkgs.systemd}/bin/resolvectl default-route homewg no
+    '';
+  };
+
   networking.networkmanager.plugins = with pkgs; [
     networkmanager-openconnect
   ];

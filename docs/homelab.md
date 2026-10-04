@@ -150,7 +150,9 @@ Remote access from the Gram uses WireGuard. Endpoint, tunnel addressing, and imp
 
 For remote access, DNS requests for local `home.arpa` names are sent to AdGuard Home through the WireGuard tunnel. After name resolution, application traffic uses the returned internal address and also traverses the tunnel.
 
-On the Gram, `systemd-resolved` provides split DNS. While the `homewg` interface is present, the routing-only domain `~home.arpa` is bound to the homelab resolver at `192.168.0.202`. Other DNS queries remain under the active Wi-Fi/VPN policy, so the UGA VPN and the homelab tunnel can be used at the same time without DNS-server ordering determining which namespace wins. The split-DNS policy is re-applied when `homewg` is created and does not store WireGuard keys or endpoint configuration in this repository.
+On the Gram, `systemd-resolved` provides split DNS. The `homewg` NetworkManager profile is constrained so that the routing-only domain `~home.arpa` uses the homelab resolver at `192.168.0.202`, while `homewg` is not allowed to become the IPv4 or IPv6 default route. Other DNS queries remain under the active Wi-Fi/VPN policy, so the UGA VPN and the homelab tunnel can be used at the same time without DNS-server ordering determining which namespace wins.
+
+The repository currently manages only the non-secret policy of the existing `homewg` NetworkManager profile. WireGuard private key material remains outside Git. A future fully declarative profile should keep the public profile definition in Nix while sourcing the private key from a root-only external secret or an encrypted secret-management mechanism; the private key must never be committed to this repository.
 
 The current local names are:
 

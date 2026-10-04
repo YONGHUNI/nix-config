@@ -105,56 +105,46 @@
   # DNS servers installed by Wi-Fi or VPN connections.
   services.resolved.enable = true;
 
-  # Keep *.home.arpa on the homelab DNS resolver whenever homewg is active.
-  # The WireGuard profile itself intentionally remains outside this public
-  # repository because it contains endpoint/key material.
-  networking.networkmanager.dispatcherScripts = [
-    {
-      source = pkgs.writeShellScript "homewg-split-dns" ''
-        set -eu
-
-        interface="''${1:-}"
-        action="''${2:-}"
-
-        [ "$interface" = "homewg" ] || exit 0
-
-        case "$action" in
-          up|dhcp4-change|dhcp6-change|vpn-up)
-            # Run after NetworkManager has published the profile DNS state.
-            ${pkgs.systemd}/bin/systemctl restart homewg-split-dns.service
-            ;;
-          down|vpn-down)
-            ${pkgs.systemd}/bin/resolvectl revert "$interface" || true
-            ;;
-        esac
-      '';
-      type = "basic";
-    }
-  ];
-
-  # A dispatcher event is not emitted merely because nixos-rebuild changes
-  # the script while homewg is already up. Apply the same policy once at
-  # activation/boot when the interface already exists.
-  systemd.services.homewg-split-dns = {
-    description = "Apply split DNS for the homelab WireGuard link";
-    after = [
-      "NetworkManager.service"
-      "systemd-resolved.service"
-    ];
-    wants = [ "systemd-resolved.service" ];
+  # Keep the externally managed homewg profile from becoming a DNS or IP
+  # default route. The profile itself currently remains outside this public
+  # repository because it contains WireGuard secret material.
+  #
+  # This service edits only non-secret NetworkManager properties. Doing this
+  # at the profile level avoids the boot-time race that occurred when
+  # systemd-resolved was corrected only after NetworkManager had already
+  # published homewg's old "~." DNS routing domain.
+  systemd.services.homewg-network-policy = {
+    description = "Enforce NetworkManager policy for the homelab WireGuard profile";
+    after = [ "NetworkManager.service" ];
+    wants = [ "NetworkManager.service" ];
     wantedBy = [ "multi-user.target" ];
-    unitConfig.ConditionPathExists = "/sys/class/net/homewg";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStartPre = "${pkgs.coreutils}/bin/sleep 1";
-    };
+
+    serviceConfig.Type = "oneshot";
+
+    path = [
+      pkgs.networkmanager
+    ];
+
     script = ''
-      # NetworkManager may first publish DNS settings from the persistent
-      # homewg profile. Replace the link-scoped resolved state after that
-      # update so only the homelab namespace is routed through this link.
-      ${pkgs.systemd}/bin/resolvectl dns homewg 192.168.0.202
-      ${pkgs.systemd}/bin/resolvectl domain homewg '~home.arpa'
-      ${pkgs.systemd}/bin/resolvectl default-route homewg no
+      set -eu
+
+      if ! nmcli -t -f NAME connection show | \${pkgs.gnugrep}/bin/grep -Fxq homewg; then
+        echo "homewg NetworkManager profile not found; leaving networking unchanged"
+        exit 0
+      fi
+
+      # Route only the homelab namespace through the homelab resolver.
+      nmcli connection modify homewg \
+        ipv4.dns "192.168.0.202" \
+        ipv4.dns-search "~home.arpa" \
+        ipv4.never-default yes \
+        ipv6.never-default yes
+
+      # If the tunnel is already active, apply the profile changes without
+      # tearing the WireGuard connection down.
+      if nmcli -t -f DEVICE,STATE device | \${pkgs.gnugrep}/bin/grep -Fxq "homewg:connected"; then
+        nmcli device reapply homewg
+      fi
     '';
   };
 
@@ -374,12 +364,9 @@
   '';
 
   # Allow members of the users group to control the touchpad LED.
-  # Also re-apply homelab split DNS whenever homewg is created, even when
-  # the WireGuard interface is brought up outside NetworkManager.
   services.udev.extraRules = ''
     ACTION=="add", SUBSYSTEM=="leds", KERNEL=="tpad_led", RUN+="${pkgs.coreutils}/bin/chgrp users /sys%p/brightness"
     ACTION=="add", SUBSYSTEM=="leds", KERNEL=="tpad_led", RUN+="${pkgs.coreutils}/bin/chmod g+w /sys%p/brightness"
-    ACTION=="add", SUBSYSTEM=="net", KERNEL=="homewg", TAG+="systemd", ENV{SYSTEMD_WANTS}+="homewg-split-dns.service"
   '';
 
   # Enable the flatpak

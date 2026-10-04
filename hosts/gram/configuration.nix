@@ -128,7 +128,7 @@
     script = ''
       set -eu
 
-      if ! nmcli -t -f NAME connection show | \${pkgs.gnugrep}/bin/grep -Fxq homewg; then
+      if ! nmcli -t -f NAME connection show | ${pkgs.gnugrep}/bin/grep -Fxq homewg; then
         echo "homewg NetworkManager profile not found; leaving networking unchanged"
         exit 0
       fi
@@ -142,7 +142,7 @@
 
       # If the tunnel is already active, apply the profile changes without
       # tearing the WireGuard connection down.
-      if nmcli -t -f DEVICE,STATE device | \${pkgs.gnugrep}/bin/grep -Fxq "homewg:connected"; then
+      if nmcli -t -f DEVICE,STATE device | ${pkgs.gnugrep}/bin/grep -Fxq "homewg:connected"; then
         nmcli device reapply homewg
       fi
     '';

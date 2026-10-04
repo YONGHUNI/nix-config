@@ -369,9 +369,12 @@
   '';
 
   # Allow members of the users group to control the touchpad LED.
+  # Also re-apply homelab split DNS whenever homewg is created, even when
+  # the WireGuard interface is brought up outside NetworkManager.
   services.udev.extraRules = ''
     ACTION=="add", SUBSYSTEM=="leds", KERNEL=="tpad_led", RUN+="${pkgs.coreutils}/bin/chgrp users /sys%p/brightness"
     ACTION=="add", SUBSYSTEM=="leds", KERNEL=="tpad_led", RUN+="${pkgs.coreutils}/bin/chmod g+w /sys%p/brightness"
+    ACTION=="add", SUBSYSTEM=="net", KERNEL=="homewg", TAG+="systemd", ENV{SYSTEMD_WANTS}+="homewg-split-dns.service"
   '';
 
   # Enable the flatpak

@@ -156,6 +156,15 @@ in
         User = "ys01849";
       };
 
+      sapelo-slurm = {
+        HostName = "127.0.0.1";
+        Port = 22022;
+        User = "ys01849";
+        IdentityFile = "~/.ssh/id_ed25519";
+        IdentitiesOnly = true;
+        HostKeyAlias = "sapelo-slurm";
+      };
+
     };
   };
   programs.plasma = {

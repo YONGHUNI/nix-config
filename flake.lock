@@ -160,6 +160,22 @@
         "type": "github"
       }
     },
+    "positron-slurm": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791350830,
+        "narHash": "sha256-jH8dD3sUJ5koD6S3Q2QeqQzqgPyjm9VCvWxllwSZazY=",
+        "owner": "YONGHUNI",
+        "repo": "positron-slurm",
+        "rev": "d3d34a93f4f869f0d9f3309683dda2beda99f45f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "YONGHUNI",
+        "repo": "positron-slurm",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "dotfiles": "dotfiles",
@@ -169,7 +185,8 @@
         "nixpkgs": "nixpkgs",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nixpkgs-wsl": "nixpkgs-wsl",
-        "plasma-manager": "plasma-manager"
+        "plasma-manager": "plasma-manager",
+        "positron-slurm": "positron-slurm"
       }
     }
   },

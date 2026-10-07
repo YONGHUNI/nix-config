@@ -81,6 +81,7 @@ nix flake update dotfiles
 - [Research VM (`nixos-research`)](docs/research-vm.md)
 - [DNS container (`nixos-dns`)](docs/dns-container.md)
 - [UGA OpenConnect VPN](docs/uga-vpn.md)
+- [Positron on Slurm (Sapelo2)](docs/positron-slurm.md)
 - [LG Gram touchpad Fn+F5 and status LED](docs/gram-touchpad.md)
 - [HOP packaging and execution](docs/hop.md)
 - [KakaoTalk with Bottles](docs/kakaotalk-bottles.md)

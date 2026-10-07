@@ -40,6 +40,7 @@ in
     LOGIN_TARGET="sapelo"
     SHARED_DIR="/work/whlab/ys01849/.positron-slurm"
     LOCAL_PORT=22022
+    PARTITION="inter_p"
   '';
 
   # Keep Positron on a simple localhost SSH target. The system OpenSSH

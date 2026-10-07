@@ -42,20 +42,4 @@ in
     LOCAL_PORT=22022
     PARTITION="inter_p"
   '';
-
-  # Keep Positron on a simple localhost SSH target. The system OpenSSH
-  # tunnel handles the login-node -> compute-node hop before Positron connects.
-  # This is separate from ~/.ssh/config so the existing
-  # remoteSSH.configFile setting can remain unchanged.
-  home.file.".ssh/positron-slurm.conf".text = ''
-    Host sapelo-slurm
-        HostName 127.0.0.1
-        Port 22022
-        User ys01849
-
-        IdentityFile ~/.ssh/id_ed25519
-        IdentitiesOnly yes
-
-        HostKeyAlias sapelo-slurm
-  '';
 }

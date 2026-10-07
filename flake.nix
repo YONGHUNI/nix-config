@@ -31,6 +31,11 @@
       url = "github:YONGHUNI/dotfiles";
       flake = false;
     };
+
+    positron-slurm = {
+      url = "github:YONGHUNI/positron-slurm";
+      flake = false;
+    };
   };
 
   outputs =
@@ -43,6 +48,7 @@
       plasma-manager,
       nix-flatpak,
       dotfiles,
+      positron-slurm,
       ...
     }:
     let
@@ -89,7 +95,7 @@
               home-manager.useUserPackages = true;
 
               home-manager.extraSpecialArgs = {
-                inherit dotfiles;
+                inherit dotfiles positron-slurm;
                 pkgsUnstable = import nixpkgs-unstable {
                   system = "x86_64-linux";
                   config.allowUnfree = true;
@@ -105,6 +111,7 @@
                   ./home/common.nix
                   ./home/yonghun.nix
                   ./home/positron-pixi-nix-shim.nix
+                  ./home/positron-slurm.nix
                   ./hosts/gram/home.nix
                 ];
               };

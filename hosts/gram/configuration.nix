@@ -241,6 +241,31 @@
   services.displayManager.sddm.enable = true;
   services.desktopManager.plasma6.enable = true;
 
+  # Wireless secondary display (Sunshine + Moonlight)
+  services.sunshine = {
+    enable = true;
+    autoStart = false;
+    capSysAdmin = false;
+    openFirewall = false;
+  };
+
+  # Sunshine streaming ports on Wi-Fi
+  networking.firewall.interfaces."wlp0s20f3" = {
+    allowedTCPPorts = [
+      47984
+      47989
+      48010
+    ];
+
+    allowedUDPPorts = [
+      47998
+      47999
+      48000
+      48002
+      48010
+    ];
+  };
+
   # Configure keymap in X11
   services.xserver.xkb = {
     layout = "us";
@@ -341,6 +366,8 @@
     wireguard-tools
     openconnect
     (pkgs.callPackage ../../pkgs/openconnect-saml { })
+
+    kdePackages.krfb
 
   ];
 

@@ -25,8 +25,7 @@ let
     for ((attempt = 0; attempt < 40; attempt++)); do
       if outputs="$(${kscreenDoctor} -o)" && ${pkgs.gnugrep}/bin/grep -Fq ' ${outputName} ' <<< "$outputs"; then
         ${kscreenDoctor} \
-          output.${outputName}.mirror.none \
-          output.${outputName}.scale.${scale}
+          output.${outputName}.mirror.none${lib.optionalString (scale != null) " output.${outputName}.scale.${scale}"}
         exit 0
       fi
       ${pkgs.coreutils}/bin/sleep 0.5
@@ -176,7 +175,11 @@ in
   options.services.ipad-display = {
     enable = lib.mkEnableOption "Gram wireless iPad display";
     resolution = lib.mkOption { type = lib.types.strMatching "[0-9]+x[0-9]+"; default = "2732x2048"; };
-    scale = lib.mkOption { type = lib.types.strMatching "[0-9]+([.][0-9]+)?"; default = "1.5"; };
+    scale = lib.mkOption {
+      type = lib.types.nullOr (lib.types.strMatching "[0-9]+([.][0-9]+)?");
+      default = null;
+      description = "Force this display scale at startup, or null to let KDE manage it.";
+    };
     upstreamInterface = lib.mkOption { type = lib.types.strMatching "[a-zA-Z0-9_.-]+"; default = "wlp0s20f3"; };
     ssid = lib.mkOption { type = lib.types.strMatching "[a-zA-Z0-9_-]{1,32}"; default = "Gram-Display"; };
     prefix = lib.mkOption { type = lib.types.strMatching "[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}"; default = "10.42.0"; description = "First three octets of private /24 hotspot network."; };

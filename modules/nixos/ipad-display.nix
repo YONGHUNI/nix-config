@@ -159,7 +159,7 @@ let
     '';
   };
 
-  tray = pkgs.kdePackages.callPackage ../../pkgs/ipad-display { inherit ipadDisplay; };
+  tray = pkgs.kdePackages.callPackage ../../pkgs/ipad-display { inherit ipadDisplay; inherit (cfg) defaultMode; };
 in
 {
   options.services.ipad-display = {
@@ -231,7 +231,7 @@ in
           }
           chain nat {
             type nat hook postrouting priority 99; policy accept;
-            iifname @shared oifname "${wifiInterface}" ip saddr ${client} counter masquerade
+            oifname "${wifiInterface}" ip saddr ${client} iifname @shared counter masquerade
           }
         }
         EOF

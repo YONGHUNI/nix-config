@@ -156,12 +156,21 @@ fn local_session() -> Result<bool> {
     }
     Ok(false)
 }
-fn guard_ok(shared: bool) -> Result<()> {
+fn guard_ok(shared: bool, legacy: Option<&str>) -> Result<()> {
     run(&["nft","list","chain","inet",TABLE,"input"])?;
+    run(&["nft","list","chain","inet",TABLE,"output"])?;
     run(&["nft","list","chain","inet",TABLE,"forward"])?;
     run(&["nft","list","chain","inet",TABLE,"nat"])?;
     let s = run(&["nft","list","set","inet",TABLE,"shared"])?;
     if s.contains(&format!("\"{AP}\"")) != shared { return Err(err("Firewall sharing state changed")); }
+    let lan = run(&["nft","list","set","inet",TABLE,"legacy"])?;
+    // nft omits the elements field when a set is empty.
+    let present = lan.lines().any(|l| l.trim_start().starts_with("elements ="));
+    match legacy {
+        Some(iface) if present && lan.contains(&format!("\"{iface}\"")) => (),
+        None if !present => (),
+        _ => return Err(err("Legacy streaming policy changed")),
+    }
     Ok(())
 }
 fn json(s: &str) -> String {
@@ -221,7 +230,7 @@ fn cleanup(c: &Config) -> Result<()> {
 fn start(c: &Config, shared: bool) -> Result<()> {
     if path("owned").exists() { return Err(err("Previous hotspot cleanup incomplete; reboot or inspect logs")); }
     if ap_exists() { return Err(err("Manual AP exists; reboot before first use")); }
-    guard_ok(false)?;
+    guard_ok(false, None)?;
     if !local_session()? { return Err(err("No local desktop session")); }
     check_routes(c)?;
     let ch = channel(c)?;
@@ -274,12 +283,37 @@ fn start(c: &Config, shared: bool) -> Result<()> {
         }
         if ap.try_wait()?.is_some() || dhcp.try_wait()?.is_some() { return Err(err("AP or DHCP exited")); }
         for m in &mut monitors { if m.try_wait()?.is_some() { return Err(err("Network event monitor exited")); } }
-        guard_ok(shared)?;
+        guard_ok(shared, None)?;
         check_routes(c)?;
         if channel(c)? != ch { return Err(err("Upstream channel changed; restart display")); }
         if !local_session()? { return Ok(()); }
         report(c,shared)?;
     }
+}
+fn start_wifi(c: &Config) -> Result<()> {
+    // Explicit fallback only. The guard is closed on exit or failed startup.
+    guard_ok(false, None)?;
+    if ap_exists() || path("owned").exists() { return Err(err("Hotspot cleanup incomplete")); }
+    if !local_session()? { return Err(err("No local desktop session")); }
+    mark("owned-legacy")?;
+    element("legacy", &c.wifi)?;
+    guard_ok(false, Some(&c.wifi))?;
+    let (tx, rx) = mpsc::channel();
+    let mut watcher = monitor(&["busctl","--system","monitor","org.freedesktop.login1"],tx)?;
+    run(&["systemd-notify","--ready"])?;
+    loop {
+        let _ = rx.recv_timeout(Duration::from_secs(30));
+        if watcher.try_wait()?.is_some() { return Err(err("Session monitor exited")); }
+        guard_ok(false, Some(&c.wifi))?;
+        if !local_session()? { return Ok(()); }
+    }
+}
+fn cleanup_wifi() -> Result<()> {
+    if path("owned-legacy").exists() {
+        clear("legacy")?;
+        remove("owned-legacy");
+    }
+    Ok(())
 }
 fn main() {
     let result = (|| -> Result<()> {
@@ -288,7 +322,9 @@ fn main() {
             Some("direct") => start(&c,false),
             Some("shared") => start(&c,true),
             Some("cleanup") => cleanup(&c),
-            _ => Err(err("Usage: ipad-hotspotd direct|shared|cleanup"))
+            Some("wifi") => start_wifi(&c),
+            Some("wifi-cleanup") => cleanup_wifi(),
+            _ => Err(err("Usage: ipad-hotspotd wifi|direct|shared|cleanup|wifi-cleanup"))
         }
     })();
     if let Err(e) = result { eprintln!("ipad-hotspotd: {e}"); std::process::exit(1); }

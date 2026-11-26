@@ -96,7 +96,7 @@ def firewall(shared, owns_wifi_forwarding):
     nat = f"""
     chain nat {{
         type nat hook postrouting priority 99; policy accept;
-        iifname "{AP}" oifname "{WIFI}" ip saddr {CLIENT} counter masquerade
+        oifname "{WIFI}" ip saddr {CLIENT} counter masquerade
     }}""" if shared else ""
     return f"""
 table inet {TABLE} {{
@@ -172,10 +172,10 @@ def start(mode):
     if not re.fullmatch(r"[0-9a-f]{24}", password):
         raise RuntimeError("Invalid stored hotspot password.")
     owns_wifi = shared and FORWARD.read_text().strip() == "0"
-    (RUN / "owned-table").touch()
     cmd("nft", "-f", "-", data=firewall(shared, owns_wifi))
-    (RUN / "owned-ap").touch()
+    (RUN / "owned-table").touch()
     cmd("iw", "dev", WIFI, "interface", "add", AP, "type", "__ap")
+    (RUN / "owned-ap").touch()
     cmd("nmcli", "device", "set", AP, "managed", "no")
     cmd("ip", "link", "set", AP, "down")
     cmd("iw", "dev", AP, "set", "type", "__ap")
@@ -197,6 +197,7 @@ wpa_passphrase={password}
 """ + extra
         conf = RUN / "hostapd.conf"
         write_private(conf, config)
+        info = ""
         p = subprocess.Popen(["hostapd", str(conf)])
         children.append(p)
         for _ in range(30):
@@ -217,6 +218,7 @@ wpa_passphrase={password}
         cmd("iw", "dev", AP, "set", "type", "__ap")
     else:
         raise RuntimeError("AP could not start on this Wi-Fi channel.")
+    cmd("ip", "link", "set", AP, "up")
     if shared:
         if owns_wifi:
             (RUN / "wifi-forward").touch()

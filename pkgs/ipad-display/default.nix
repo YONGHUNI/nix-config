@@ -5,11 +5,12 @@
   wrapQtAppsHook,
   kstatusnotifieritem,
   ipadDisplay,
+  defaultMode ? "shared",
 }:
 
 stdenv.mkDerivation {
   pname = "ipad-display-tray";
-  version = "0.1.0";
+  version = "0.2.0";
   src = ./.;
 
   nativeBuildInputs = [
@@ -21,5 +22,5 @@ stdenv.mkDerivation {
     kstatusnotifieritem
   ];
 
-  cmakeFlags = [ "-DIPAD_DISPLAY_CLI=${ipadDisplay}/bin/ipad-display" ];
+  cmakeFlags = [ "-DIPAD_DISPLAY_CLI=${ipadDisplay}/bin/ipad-display" "-DIPAD_DEFAULT_MODE=${defaultMode}" ];
 }

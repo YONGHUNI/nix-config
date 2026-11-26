@@ -92,7 +92,7 @@ fn channel(c: &Config) -> Result<Channel> {
 fn variants(ch: Channel) -> Result<Vec<String>> {
     let mut v = Vec::new();
     if (5000..5900).contains(&ch.freq) {
-        if let Some(start) = [36,52,100,116,132,149].into_iter().find(|s| (0..4).any(|i| s+4*i == ch.number)) {
+        if let Some(start) = [36,52,100,116,132,149].into_iter().find(|s| (0..4).any(|i| *s+4*i == ch.number)) {
             let side = if (ch.number-start)%8 == 0 { "+" } else { "-" };
             if ch.width >= 80 { v.push(format!("ieee80211ac=1\nht_capab=[HT40{side}]\nvht_oper_chwidth=1\nvht_oper_centr_freq_seg0_idx={}\n",start+6)); }
             if ch.width >= 40 { v.push(format!("ht_capab=[HT40{side}]\n")); }
@@ -114,6 +114,7 @@ fn password() -> Result<String> {
     Ok(s)
 }
 fn stop_child(child: &mut Child) {
+    if matches!(child.try_wait(), Ok(Some(_))) { return; }
     let _ = run(&["kill","-TERM",&child.id().to_string()]);
     for _ in 0..15 {
         if matches!(child.try_wait(), Ok(Some(_))) { return; }
@@ -176,7 +177,7 @@ fn report(c: &Config, shared: bool) -> Result<()> {
     let info = run(&["iw","dev",AP,"info"])?;
     let line = info.lines().find(|l| l.trim_start().starts_with("channel ")).unwrap_or("").trim();
     let route = run(&["ip","-4","route","get","1.1.1.1","from",&c.client,"iif",AP]).unwrap_or_default();
-    let available = route.split_whitespace().collect::<Vec<_>>().windows(2).any(|w| w[0]=="dev" && w[1]==c.wifi);
+    let available = route.split_whitespace().collect::<Vec<_>>().windows(2).any(|w| w[0]=="dev" && w[1]==c.wifi.as_str());
     let stations = run(&["iw","dev",AP,"station","dump"])?.lines().filter(|l| l.trim_start()=="authorized:\tyes" || l.split_whitespace().collect::<Vec<_>>() == ["authorized:","yes"]).count();
     let state = format!("{{\"mode\":{},\"ssid\":{},\"ip\":{},\"channel\":{},\"internet\":{},\"stations\":{stations}}}",
         json(if shared {"shared"} else {"direct"}),json(&c.ssid),json(&c.host),json(line),
@@ -201,7 +202,8 @@ fn monitor(args: &[&str], tx: mpsc::Sender<()>) -> Result<Child> {
 fn cleanup(c: &Config) -> Result<()> {
     // ExecStopPost runs after the whole service cgroup is stopped, even on failure.
     if !path("owned").exists() { return Ok(()); }
-    let _ = clear("shared"); // fail closed before touching forwarding/interface
+    let share_closed = clear("shared").is_ok(); // fail closed before touching forwarding/interface
+    if !share_closed { eprintln!("Unable to close sharing set; removing AP immediately"); }
     remove("status.json"); remove("qr.txt");
     if path("owned-ap").exists() && ap_exists() {
         let _ = run(&["ip","link","set",AP,"down"]);
@@ -212,7 +214,7 @@ fn cleanup(c: &Config) -> Result<()> {
             set_forward(&c.wifi,"0\n")?;
         }
     }
-    let _ = clear("owned_forward");
+    clear("owned_forward")?;
     for file in ["owned","owned-ap","wifi-forward","hostapd.conf","status.tmp"] { remove(file); }
     Ok(())
 }
@@ -220,6 +222,7 @@ fn start(c: &Config, shared: bool) -> Result<()> {
     if path("owned").exists() { return Err(err("Previous hotspot cleanup incomplete; reboot or inspect logs")); }
     if ap_exists() { return Err(err("Manual AP exists; reboot before first use")); }
     guard_ok(false)?;
+    if !local_session()? { return Err(err("No local desktop session")); }
     check_routes(c)?;
     let ch = channel(c)?;
     let secret = password()?;

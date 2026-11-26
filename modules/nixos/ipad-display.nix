@@ -66,10 +66,8 @@ let
       }
 
       hotspot_stop() {
-        for unit in ipad-hotspot-direct.service ipad-hotspot-shared.service; do
-          if systemctl is-active --quiet "$unit"; then
-            systemctl stop "$unit" || return 1
-          fi
+        for unit in ipad-hotspot-wifi.service ipad-hotspot-direct.service ipad-hotspot-shared.service; do
+          systemctl stop "$unit" || return 1
         done
       }
 
@@ -79,15 +77,12 @@ let
           return 1
         fi
         mode="''${1:-${cfg.defaultMode}}"
+        case "$mode" in wifi|direct|shared) ;; *) return 1 ;; esac
+        # Never carry an existing stream across a connection-mode change.
+        systemctl --user stop sunshine.service ipad-virtual-monitor.service || return 1
+        hotspot_stop || return 1
         printf "%s\n" "$mode" > "$XDG_RUNTIME_DIR/ipad-display-mode"
-        case "$mode" in
-          wifi) hotspot_stop ;;
-          direct|shared)
-            hotspot_stop
-            systemctl start "ipad-hotspot-$mode.service" || return 1
-            ;;
-          *) return 1 ;;
-        esac
+        systemctl start "ipad-hotspot-$mode.service" || return 1
         if ! systemctl --user start sunshine.service; then
           hotspot_stop || true
           systemctl --user stop ipad-virtual-monitor.service || true
@@ -103,7 +98,7 @@ let
 
       stop_display() {
         systemctl --user stop sunshine.service ipad-virtual-monitor.service
-        hotspot_stop
+        hotspot_stop || return 1
         rm -f "$XDG_RUNTIME_DIR/ipad-display-mode"
       }
 
@@ -118,6 +113,7 @@ let
             toggle)
               state_info
               if [[ "$server" == active || "$monitor" == active ]] ||
+                 systemctl is-active --quiet ipad-hotspot-wifi.service ||
                  systemctl is-active --quiet ipad-hotspot-direct.service ||
                  systemctl is-active --quiet ipad-hotspot-shared.service; then
                 stop_display
@@ -133,10 +129,11 @@ let
           jq -n --arg ssid "$ssid" --arg ipv4 "$ipv4" \
             --arg server "$server" --arg monitor "$monitor" \
             --argjson hotspot "$(cat /run/ipad-hotspot/status.json 2>/dev/null || echo null)" \
+            --arg wifi "$(systemctl show -p ActiveState --value ipad-hotspot-wifi.service)" \
             --arg direct "$(systemctl show -p ActiveState --value ipad-hotspot-direct.service)" \
             --arg shared "$(systemctl show -p ActiveState --value ipad-hotspot-shared.service)" \
             --arg requested "$(cat "$XDG_RUNTIME_DIR/ipad-display-mode" 2>/dev/null || echo wifi)" \
-            '{ssid:$ssid,ipv4:$ipv4,sunshine:$server,monitor:$monitor,hotspot:$hotspot,direct:$direct,shared:$shared,requested:$requested}'
+            '{ssid:$ssid,ipv4:$ipv4,sunshine:$server,monitor:$monitor,hotspot:$hotspot,wifi:$wifi,direct:$direct,shared:$shared,requested:$requested}'
           ;;
         qr)
           test -r /run/ipad-hotspot/qr.txt
@@ -195,12 +192,12 @@ in
     allowedUDPPorts = [ 67 47998 47999 48000 48002 48010 ];
   };
 
-  # Authorize only start/stop of these two units for active local wheel users.
+  # Authorize only start/stop of the three display mode units for local wheel users.
   security.polkit.extraConfig = ''
     polkit.addRule(function(action, subject) {
       if (action.id == "org.freedesktop.systemd1.manage-units" &&
           subject.local && subject.active && subject.isInGroup("wheel") &&
-          ["ipad-hotspot-direct.service", "ipad-hotspot-shared.service"].indexOf(action.lookup("unit")) >= 0 &&
+          ["ipad-hotspot-wifi.service", "ipad-hotspot-direct.service", "ipad-hotspot-shared.service"].indexOf(action.lookup("unit")) >= 0 &&
           ["start", "stop"].indexOf(action.lookup("verb")) >= 0) {
         return polkit.Result.YES;
       }
@@ -214,7 +211,7 @@ in
     ipad-hotspot-guard = {
       description = "Default-deny iPad hotspot network policy";
       wantedBy = [ "multi-user.target" ];
-      before = [ "ipad-hotspot-direct.service" "ipad-hotspot-shared.service" ];
+      before = [ "ipad-hotspot-wifi.service" "ipad-hotspot-direct.service" "ipad-hotspot-shared.service" ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -227,6 +224,7 @@ in
         delete table inet ipad_display
         table inet ipad_display {
           set shared { type ifname; }
+          set legacy { type ifname; }
           set owned_forward { type ifname; }
           chain input {
             type filter hook input priority -10; policy accept;
@@ -235,6 +233,21 @@ in
             iifname "ipad-ap" ip saddr ${client} ip daddr ${host} udp dport { 47998, 47999, 48000, 48002, 48010 } accept
             iifname "ipad-ap" ip saddr ${client} ip daddr ${host} icmp type echo-request accept
             iifname "ipad-ap" counter drop
+            # Sunshine streaming ports are closed unless explicit legacy mode is active.
+            iifname "lo" accept
+            iifname @legacy tcp dport { 47984, 47989, 48010 } accept
+            iifname @legacy udp dport { 47998, 47999, 48000, 48002, 48010 } accept
+            tcp dport { 47984, 47989, 48010 } counter drop
+            udp dport { 47998, 47999, 48000, 48002, 48010 } counter drop
+          }
+          chain output {
+            type filter hook output priority -10; policy accept;
+            # Prevent residual stream packets from leaving via the old LAN.
+            oifname "lo" accept
+            oifname "ipad-ap" ip saddr ${host} ip daddr ${client} accept
+            oifname @legacy accept
+            tcp sport { 47984, 47989, 48010 } counter drop
+            udp sport { 47998, 47999, 48000, 48002, 48010 } counter drop
           }
           chain forward {
             type filter hook forward priority -10; policy accept;
@@ -267,13 +280,13 @@ in
         IPAD_PREFIX = cfg.prefix;
         LC_ALL = "C";
       };
-      conflicts = [ "ipad-hotspot-${if mode == "direct" then "shared" else "direct"}.service" "sleep.target" ];
+      conflicts = (map (other: "ipad-hotspot-${other}.service") (lib.filter (other: other != mode) [ "wifi" "direct" "shared" ])) ++ [ "sleep.target" ];
       before = [ "sleep.target" ];
       serviceConfig = {
         Type = "notify";
         NotifyAccess = "all";
         ExecStart = "${hotspot}/bin/ipad-hotspotd ${mode}";
-        ExecStopPost = "${hotspot}/bin/ipad-hotspotd cleanup";
+        ExecStopPost = "${hotspot}/bin/ipad-hotspotd ${if mode == "wifi" then "wifi-cleanup" else "cleanup"}";
         UMask = "0077";
         StateDirectory = "ipad-hotspot";
         StateDirectoryMode = "0700";
@@ -282,7 +295,7 @@ in
         KillMode = "control-group";
       };
     };
-  }) [ "direct" "shared" ]);
+  }) [ "wifi" "direct" "shared" ]);
 
   environment.systemPackages = [
     pkgs.kdePackages.krfb
@@ -307,7 +320,8 @@ in
     };
   };
 
-  # Preserve the tested Wi-Fi-only rules; do not expose VNC or the web UI.
+  # The independent guard above restricts these ports to explicit legacy mode.
+  # Keep the base firewall permits; an earlier guard DROP cannot be overridden.
   networking.firewall.interfaces.${wifiInterface} = {
     allowedTCPPorts = [
       47984

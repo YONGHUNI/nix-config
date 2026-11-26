@@ -8,5 +8,5 @@ find_package(KF6StatusNotifierItem REQUIRED)
 
 add_executable(ipad-display-tray main.cpp)
 target_link_libraries(ipad-display-tray PRIVATE Qt6::Widgets KF6::StatusNotifierItem)
-target_compile_definitions(ipad-display-tray PRIVATE IPAD_DISPLAY_CLI="${IPAD_DISPLAY_CLI}")
+target_compile_definitions(ipad-display-tray PRIVATE IPAD_DISPLAY_CLI="${IPAD_DISPLAY_CLI}" IPAD_DEFAULT_MODE="${IPAD_DEFAULT_MODE}")
 install(TARGETS ipad-display-tray RUNTIME DESTINATION bin)

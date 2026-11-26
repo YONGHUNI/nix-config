@@ -229,8 +229,8 @@ in
           chain input {
             type filter hook input priority -10; policy accept;
             iifname "ipad-ap" meta nfproto ipv4 udp sport 68 udp dport 67 accept
-            iifname "ipad-ap" ip saddr ${client} ip daddr ${host} tcp dport { 47984, 47989, 48010 } accept
-            iifname "ipad-ap" ip saddr ${client} ip daddr ${host} udp dport { 47998, 47999, 48000, 48002, 48010 } accept
+            iifname "ipad-ap" ip saddr ${client} ip daddr ${host} tcp dport { 47984, 47989, 48010 } counter accept
+            iifname "ipad-ap" ip saddr ${client} ip daddr ${host} udp dport { 47998, 47999, 48000, 48002, 48010 } counter accept
             iifname "ipad-ap" ip saddr ${client} ip daddr ${host} icmp type echo-request accept
             iifname "ipad-ap" counter drop
             # Sunshine streaming ports are closed unless explicit legacy mode is active.
@@ -244,7 +244,8 @@ in
             type filter hook output priority -10; policy accept;
             # Prevent residual stream packets from leaving via the old LAN.
             oifname "lo" accept
-            oifname "ipad-ap" ip saddr ${host} ip daddr ${client} accept
+            oifname "ipad-ap" ip saddr ${host} ip daddr ${client} tcp sport { 47984, 47989, 48010 } counter accept
+            oifname "ipad-ap" ip saddr ${host} ip daddr ${client} udp sport { 47998, 47999, 48000, 48002, 48010 } counter accept
             oifname @legacy accept
             tcp sport { 47984, 47989, 48010 } counter drop
             udp sport { 47998, 47999, 48000, 48002, 48010 } counter drop

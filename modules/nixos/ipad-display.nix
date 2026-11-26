@@ -32,6 +32,14 @@ let
     exit 1
   '';
 
+  hotspot = pkgs.writeShellApplication {
+    name = "ipad-hotspot-service";
+    runtimeInputs = with pkgs; [ python3 iw iproute2 networkmanager nftables hostapd dnsmasq systemd ];
+    text = ''
+      exec python3 ${../../pkgs/ipad-display/hotspot.py} "$@"
+    '';
+  };
+
   ipadDisplay = pkgs.writeShellApplication {
     name = "ipad-display";
     runtimeInputs = [
@@ -39,6 +47,7 @@ let
       pkgs.iproute2
       pkgs.networkmanager
       pkgs.gawk
+      pkgs.qrencode
       pkgs.jq
       pkgs.util-linux
       pkgs.kdePackages.libkscreen
@@ -59,12 +68,26 @@ let
         printf 'Wi-Fi SSID: %s\nWi-Fi IPv4: %s\n' "''${ssid:-Not connected}" "''${ipv4:-Unavailable}"
       }
 
+      hotspot_stop() {
+        systemctl stop ipad-hotspot-direct.service ipad-hotspot-shared.service
+      }
+
       start_display() {
         if ! systemctl --user is-active --quiet graphical-session.target; then
           echo "Run this command inside your Plasma desktop session." >&2
           return 1
         fi
+        mode="''${1:-wifi}"
+        case "$mode" in
+          wifi) ;;
+          direct|shared)
+            hotspot_stop
+            systemctl start "ipad-hotspot-$mode.service" || return 1
+            ;;
+          *) return 1 ;;
+        esac
         if ! systemctl --user start sunshine.service; then
+          hotspot_stop || true
           systemctl --user stop ipad-virtual-monitor.service || true
           echo "Startup failed. Run ipad-display logs." >&2
           return 1
@@ -75,6 +98,7 @@ let
 
       stop_display() {
         systemctl --user stop sunshine.service ipad-virtual-monitor.service
+        hotspot_stop
       }
 
       case "''${1:-}" in
@@ -82,15 +106,15 @@ let
           exec 9>"''${XDG_RUNTIME_DIR:?}/ipad-display.lock"
           flock 9
           case "$1" in
-            start) start_display ;;
+            start) start_display "''${2:-wifi}" ;;
             stop) stop_display ;;
-            restart) stop_display; start_display ;;
+            restart) stop_display; start_display "''${2:-wifi}" ;;
             toggle)
               state_info
               if [[ "$server" == active || "$monitor" == active ]]; then
                 stop_display
               else
-                start_display
+                start_display "''${2:-wifi}"
               fi
               ;;
           esac
@@ -100,7 +124,12 @@ let
           state_info
           jq -n --arg ssid "$ssid" --arg ipv4 "$ipv4" \
             --arg server "$server" --arg monitor "$monitor" \
-            '{ssid:$ssid,ipv4:$ipv4,sunshine:$server,monitor:$monitor}'
+            --argjson hotspot "$(cat /run/ipad-hotspot/status.json 2>/dev/null || echo null)" \
+            '{ssid:$ssid,ipv4:$ipv4,sunshine:$server,monitor:$monitor,hotspot:$hotspot}'
+          ;;
+        qr)
+          test -r /run/ipad-hotspot/qr.txt
+          qrencode -r /run/ipad-hotspot/qr.txt -o - -s 8 -m 4
           ;;
         status)
           print_network
@@ -121,6 +150,49 @@ let
   tray = pkgs.kdePackages.callPackage ../../pkgs/ipad-display { inherit ipadDisplay; };
 in
 {
+  # The AP is explicitly unmanaged; the upstream connection stays under NM.
+  networking.networkmanager.unmanaged = [ "interface-name:ipad-ap" ];
+  networking.firewall.interfaces."ipad-ap" = {
+    allowedTCPPorts = [ 47984 47989 48010 ];
+    allowedUDPPorts = [ 67 47998 47999 48000 48002 48010 ];
+  };
+
+  # Authorize only start/stop of these two units for active local wheel users.
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if (action.id == "org.freedesktop.systemd1.manage-units" &&
+          subject.local && subject.active && subject.isInGroup("wheel") &&
+          ["ipad-hotspot-direct.service", "ipad-hotspot-shared.service"].indexOf(action.lookup("unit")) >= 0 &&
+          ["start", "stop"].indexOf(action.lookup("verb")) >= 0) {
+        return polkit.Result.YES;
+      }
+    });
+  '';
+
+  systemd.services = builtins.listToAttrs (map (mode: {
+    name = "ipad-hotspot-${mode}";
+    value = {
+      description = "Gram iPad hotspot (${mode})";
+      after = [ "NetworkManager.service" "firewall.service" ];
+      requires = [ "NetworkManager.service" "firewall.service" ];
+      conflicts = [ "ipad-hotspot-${if mode == "direct" then "shared" else "direct"}.service" "sleep.target" ];
+      before = [ "sleep.target" ];
+      serviceConfig = {
+        Type = "notify";
+        NotifyAccess = "all";
+        ExecStart = "${hotspot}/bin/ipad-hotspot-service ${mode}";
+        ExecStopPost = "${hotspot}/bin/ipad-hotspot-service cleanup";
+        RuntimeDirectory = "ipad-hotspot";
+        RuntimeDirectoryMode = "0750";
+        StateDirectory = "ipad-hotspot";
+        StateDirectoryMode = "0700";
+        TimeoutStartSec = 60;
+        TimeoutStopSec = 30;
+        KillMode = "mixed";
+      };
+    };
+  }) [ "direct" "shared" ]);
+
   environment.systemPackages = [
     pkgs.kdePackages.krfb
     ipadDisplay

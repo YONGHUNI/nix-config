@@ -69,7 +69,11 @@ let
       }
 
       hotspot_stop() {
-        systemctl stop ipad-hotspot-direct.service ipad-hotspot-shared.service
+        for unit in ipad-hotspot-direct.service ipad-hotspot-shared.service; do
+          if systemctl is-active --quiet "$unit"; then
+            systemctl stop "$unit" || return 1
+          fi
+        done
       }
 
       start_display() {
@@ -79,7 +83,7 @@ let
         fi
         mode="''${1:-wifi}"
         case "$mode" in
-          wifi) ;;
+          wifi) hotspot_stop ;;
           direct|shared)
             hotspot_stop
             systemctl start "ipad-hotspot-$mode.service" || return 1
@@ -93,6 +97,9 @@ let
           return 1
         fi
         echo "Sunshine service started. Open Moonlight to connect."
+        if [[ "$mode" != wifi ]]; then
+          echo "Hotspot: Gram-Display; Moonlight host: 10.42.0.1"
+        fi
         print_network
       }
 
@@ -111,7 +118,9 @@ let
             restart) stop_display; start_display "''${2:-wifi}" ;;
             toggle)
               state_info
-              if [[ "$server" == active || "$monitor" == active ]]; then
+              if [[ "$server" == active || "$monitor" == active ]] ||
+                 systemctl is-active --quiet ipad-hotspot-direct.service ||
+                 systemctl is-active --quiet ipad-hotspot-shared.service; then
                 stop_display
               else
                 start_display "''${2:-wifi}"
@@ -133,6 +142,7 @@ let
           ;;
         status)
           print_network
+          cat /run/ipad-hotspot/status.json 2>/dev/null || true
           systemctl --user --no-pager status sunshine.service ipad-virtual-monitor.service || true
           kscreen-doctor -o
           ;;
@@ -140,7 +150,7 @@ let
           journalctl --user -u sunshine.service -u ipad-virtual-monitor.service -f
           ;;
         *)
-          echo "Usage: ipad-display {start|stop|restart|toggle|status|info|logs}" >&2
+          echo "Usage: ipad-display {start|restart|toggle} [wifi|direct|shared], or {stop|status|info|logs|qr}" >&2
           exit 1
           ;;
       esac

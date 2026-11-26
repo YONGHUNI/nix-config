@@ -1,11 +1,14 @@
-{ pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 let
+  cfg = config.services.ipad-display;
   displayName = "iPad";
   outputName = "Virtual-${displayName}";
-  resolution = "2732x2048";
-  scale = "1.5";
-  wifiInterface = "wlp0s20f3";
+  resolution = cfg.resolution;
+  scale = cfg.scale;
+  wifiInterface = cfg.upstreamInterface;
+  host = "${cfg.prefix}.1";
+  client = "${cfg.prefix}.2";
   kscreenDoctor = "${pkgs.kdePackages.libkscreen}/bin/kscreen-doctor";
 
   krfbStart = pkgs.writeShellScript "ipad-virtual-monitor" ''
@@ -32,13 +35,7 @@ let
     exit 1
   '';
 
-  hotspot = pkgs.writeShellApplication {
-    name = "ipad-hotspot-service";
-    runtimeInputs = with pkgs; [ python3 iw iproute2 networkmanager nftables hostapd dnsmasq systemd ];
-    text = ''
-      exec python3 ${../../pkgs/ipad-display/hotspot.py} "$@"
-    '';
-  };
+  hotspot = pkgs.callPackage ../../pkgs/ipad-hotspotd { };
 
   ipadDisplay = pkgs.writeShellApplication {
     name = "ipad-display";
@@ -81,7 +78,8 @@ let
           echo "Run this command inside your Plasma desktop session." >&2
           return 1
         fi
-        mode="''${1:-wifi}"
+        mode="''${1:-${cfg.defaultMode}}"
+        printf "%s\n" "$mode" > "$XDG_RUNTIME_DIR/ipad-display-mode"
         case "$mode" in
           wifi) hotspot_stop ;;
           direct|shared)
@@ -98,7 +96,7 @@ let
         fi
         echo "Sunshine service started. Open Moonlight to connect."
         if [[ "$mode" != wifi ]]; then
-          echo "Hotspot: Gram-Display; Moonlight host: 10.42.0.1"
+          echo "Hotspot: ${cfg.ssid}; Moonlight host: ${host}"
         fi
         print_network
       }
@@ -106,6 +104,7 @@ let
       stop_display() {
         systemctl --user stop sunshine.service ipad-virtual-monitor.service
         hotspot_stop
+        rm -f "$XDG_RUNTIME_DIR/ipad-display-mode"
       }
 
       case "''${1:-}" in
@@ -113,9 +112,9 @@ let
           exec 9>"''${XDG_RUNTIME_DIR:?}/ipad-display.lock"
           flock 9
           case "$1" in
-            start) start_display "''${2:-wifi}" ;;
+            start) start_display "''${2:-${cfg.defaultMode}}" ;;
             stop) stop_display ;;
-            restart) stop_display; start_display "''${2:-wifi}" ;;
+            restart) stop_display; start_display "''${2:-${cfg.defaultMode}}" ;;
             toggle)
               state_info
               if [[ "$server" == active || "$monitor" == active ]] ||
@@ -123,7 +122,7 @@ let
                  systemctl is-active --quiet ipad-hotspot-shared.service; then
                 stop_display
               else
-                start_display "''${2:-wifi}"
+                start_display "''${2:-${cfg.defaultMode}}"
               fi
               ;;
           esac
@@ -134,7 +133,10 @@ let
           jq -n --arg ssid "$ssid" --arg ipv4 "$ipv4" \
             --arg server "$server" --arg monitor "$monitor" \
             --argjson hotspot "$(cat /run/ipad-hotspot/status.json 2>/dev/null || echo null)" \
-            '{ssid:$ssid,ipv4:$ipv4,sunshine:$server,monitor:$monitor,hotspot:$hotspot}'
+            --arg direct "$(systemctl show -p ActiveState --value ipad-hotspot-direct.service)" \
+            --arg shared "$(systemctl show -p ActiveState --value ipad-hotspot-shared.service)" \
+            --arg requested "$(cat "$XDG_RUNTIME_DIR/ipad-display-mode" 2>/dev/null || echo wifi)" \
+            '{ssid:$ssid,ipv4:$ipv4,sunshine:$server,monitor:$monitor,hotspot:$hotspot,direct:$direct,shared:$shared,requested:$requested}'
           ;;
         qr)
           test -r /run/ipad-hotspot/qr.txt
@@ -160,6 +162,16 @@ let
   tray = pkgs.kdePackages.callPackage ../../pkgs/ipad-display { inherit ipadDisplay; };
 in
 {
+  options.services.ipad-display = {
+    enable = lib.mkEnableOption "Gram wireless iPad display";
+    resolution = lib.mkOption { type = lib.types.strMatching "[0-9]+x[0-9]+"; default = "2732x2048"; };
+    scale = lib.mkOption { type = lib.types.strMatching "[0-9]+([.][0-9]+)?"; default = "1.5"; };
+    upstreamInterface = lib.mkOption { type = lib.types.strMatching "[a-zA-Z0-9_.-]+"; default = "wlp0s20f3"; };
+    ssid = lib.mkOption { type = lib.types.strMatching "[a-zA-Z0-9_-]{1,32}"; default = "Gram-Display"; };
+    prefix = lib.mkOption { type = lib.types.strMatching "[0-9]{1,3}[.][0-9]{1,3}[.][0-9]{1,3}"; default = "10.42.0"; description = "First three octets of private /24 hotspot network."; };
+    defaultMode = lib.mkOption { type = lib.types.enum [ "wifi" "direct" "shared" ]; default = "shared"; };
+  };
+  config = lib.mkIf cfg.enable {
   # The AP is explicitly unmanaged; the upstream connection stays under NM.
   networking.networkmanager.unmanaged = [ "interface-name:ipad-ap" ];
   networking.firewall.interfaces."ipad-ap" = {
@@ -179,26 +191,79 @@ in
     });
   '';
 
-  systemd.services = builtins.listToAttrs (map (mode: {
+  # Independent restrictive base chains, installed before an AP can start.
+  # Keep the existing NixOS iptables backend and VPN rules untouched.
+  systemd.tmpfiles.rules = [ "d /run/ipad-hotspot 0750 root wheel -" ];
+  systemd.services = {
+    ipad-hotspot-guard = {
+      description = "Default-deny iPad hotspot network policy";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "ipad-hotspot-direct.service" "ipad-hotspot-shared.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      path = [ pkgs.nftables ];
+      script = ''
+        # Replace atomically, including on rebuild. An empty set denies sharing.
+        nft -f - <<'EOF'
+        table inet ipad_display
+        delete table inet ipad_display
+        table inet ipad_display {
+          set shared { type ifname; }
+          set owned_forward { type ifname; }
+          chain input {
+            type filter hook input priority -10; policy accept;
+            iifname "ipad-ap" meta nfproto ipv4 udp sport 68 udp dport 67 accept
+            iifname "ipad-ap" ip saddr ${client} ip daddr ${host} tcp dport { 47984, 47989, 48010 } accept
+            iifname "ipad-ap" ip saddr ${client} ip daddr ${host} udp dport { 47998, 47999, 48000, 48002, 48010 } accept
+            iifname "ipad-ap" ip saddr ${client} ip daddr ${host} icmp type echo-request accept
+            iifname "ipad-ap" counter drop
+          }
+          chain forward {
+            type filter hook forward priority -10; policy accept;
+            iifname "ipad-ap" ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/3 } counter drop
+            iifname @shared oifname "${wifiInterface}" ip saddr ${client} ct state { new, established, related } counter accept
+            iifname "${wifiInterface}" oifname @shared ip daddr ${client} ct state { established, related } counter accept
+            iifname "ipad-ap" counter drop
+            oifname "ipad-ap" counter drop
+            iifname @owned_forward oifname != "ipad-ap" counter drop
+          }
+          chain nat {
+            type nat hook postrouting priority 99; policy accept;
+            iifname @shared oifname "${wifiInterface}" ip saddr ${client} counter masquerade
+          }
+        }
+        EOF
+      '';
+    };
+  } // builtins.listToAttrs (map (mode: {
     name = "ipad-hotspot-${mode}";
     value = {
       description = "Gram iPad hotspot (${mode})";
-      after = [ "NetworkManager.service" "firewall.service" ];
-      requires = [ "NetworkManager.service" "firewall.service" ];
+      after = [ "NetworkManager.service" "firewall.service" "ipad-hotspot-guard.service" "systemd-tmpfiles-setup.service" ];
+      requires = [ "NetworkManager.service" "firewall.service" "ipad-hotspot-guard.service" ];
+      partOf = [ "ipad-hotspot-guard.service" ];
+      path = with pkgs; [ iw iproute2 nftables hostapd dnsmasq systemd coreutils ];
+      environment = {
+        IPAD_UPSTREAM = wifiInterface;
+        IPAD_SSID = cfg.ssid;
+        IPAD_PREFIX = cfg.prefix;
+        LC_ALL = "C";
+      };
       conflicts = [ "ipad-hotspot-${if mode == "direct" then "shared" else "direct"}.service" "sleep.target" ];
       before = [ "sleep.target" ];
       serviceConfig = {
         Type = "notify";
         NotifyAccess = "all";
-        ExecStart = "${hotspot}/bin/ipad-hotspot-service ${mode}";
-        ExecStopPost = "${hotspot}/bin/ipad-hotspot-service cleanup";
-        RuntimeDirectory = "ipad-hotspot";
-        RuntimeDirectoryMode = "0750";
+        ExecStart = "${hotspot}/bin/ipad-hotspotd ${mode}";
+        ExecStopPost = "${hotspot}/bin/ipad-hotspotd cleanup";
+        UMask = "0077";
         StateDirectory = "ipad-hotspot";
         StateDirectoryMode = "0700";
         TimeoutStartSec = 60;
         TimeoutStopSec = 30;
-        KillMode = "mixed";
+        KillMode = "control-group";
       };
     };
   }) [ "direct" "shared" ]);
@@ -270,5 +335,6 @@ in
       Restart = "on-failure";
       RestartSec = 3;
     };
+  };
   };
 }

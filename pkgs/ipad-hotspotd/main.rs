@@ -8,6 +8,9 @@ const AP: &str = "ipad-ap";
 const RUN: &str = "/run/ipad-hotspot";
 const STATE: &str = "/var/lib/ipad-hotspot";
 const TABLE: &str = "ipad_display";
+const AP_COOLDOWN_MS: u64 = 5_000;
+const AP_ATTEMPTS_PER_WIDTH: u32 = 3;
+const AP_RETRY_DELAY: Duration = Duration::from_secs(2);
 fn err(s: &str) -> Box<dyn std::error::Error> { io::Error::other(s.to_owned()).into() }
 fn path(s: &str) -> PathBuf { Path::new(RUN).join(s) }
 fn run(args: &[&str]) -> Result<String> {
@@ -32,6 +35,27 @@ fn set_forward(iface: &str, v: &str) -> Result<()> {
     Ok(())
 }
 fn ap_exists() -> bool { Path::new("/sys/class/net").join(AP).exists() }
+fn boot_millis() -> Result<u64> {
+    let uptime = fs::read_to_string("/proc/uptime")?;
+    let seconds: f64 = uptime.split_whitespace().next().ok_or_else(|| err("Missing uptime"))?.parse()?;
+    Ok(u64::try_from(Duration::try_from_secs_f64(seconds)?.as_millis())?)
+}
+fn cooldown_remaining(now: u64, last: u64) -> Duration {
+    Duration::from_millis(AP_COOLDOWN_MS.saturating_sub(now.saturating_sub(last)))
+}
+fn wait_ap_cooldown() -> Result<()> {
+    let last = match fs::read_to_string(path("last-ap-stop-ms")) {
+        Ok(value) => value.trim().parse::<u64>()?,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    let delay = cooldown_remaining(boot_millis()?, last);
+    if !delay.is_zero() {
+        eprintln!("AP restart cooldown: {} ms", delay.as_millis());
+        thread::sleep(delay);
+    }
+    Ok(())
+}
 fn element(set: &str, iface: &str) -> Result<()> {
     run(&["nft","add","element","inet",TABLE,set,"{", &format!("\"{iface}\""), "}"])?;
     Ok(())
@@ -129,21 +153,37 @@ fn hostapd(c: &Config, ch: Channel, secret: &str) -> Result<Child> {
     let control = path("ctrl");
     fs::create_dir_all(&control)?;
     let conf = path("hostapd.conf");
+    let mut first = true;
     for extra in variants(ch)? {
+        let width = if extra.contains("vht_oper_chwidth=1") { 80 }
+            else if extra.contains("HT40") { 40 } else { 20 };
         let hw = if ch.freq >= 5000 { "a" } else { "g" };
         let text = format!("interface={AP}\ndriver=nl80211\nssid={}\nhw_mode={hw}\nchannel={}\nieee80211n=1\nwmm_enabled=1\nwpa=2\nwpa_key_mgmt=WPA-PSK\nrsn_pairwise=CCMP\nwpa_passphrase={secret}\nctrl_interface={RUN}/ctrl\nctrl_interface_group=0\nmax_num_sta=1\n{extra}",c.ssid,ch.number);
         write(&conf,&text,0o600)?;
-        let mut child = spawn(&["hostapd",conf.to_str().unwrap()])?;
-        for _ in 0..30 {
-            if child.try_wait()?.is_some() { break; }
-            if run(&["hostapd_cli","-p",control.to_str().unwrap(),"-i",AP,"status"]).is_ok_and(|s| s.lines().any(|l| l=="state=ENABLED")) {
-                return Ok(child);
+        for attempt in 1..=AP_ATTEMPTS_PER_WIDTH {
+            if !first {
+                thread::sleep(AP_RETRY_DELAY);
+                if let Err(e) = run(&["ip","link","set",AP,"down"])
+                    .and_then(|_| run(&["iw","dev",AP,"set","type","__ap"])) {
+                    eprintln!("AP {width} MHz attempt {attempt}: interface preparation failed: {e}");
+                    continue;
+                }
             }
-            thread::sleep(Duration::from_millis(200));
+            first = false;
+            if channel(c)? != ch { return Err(err("Upstream channel changed during AP startup")); }
+            eprintln!("AP {width} MHz attempt {attempt}/{AP_ATTEMPTS_PER_WIDTH}");
+            let mut child = spawn(&["hostapd",conf.to_str().unwrap()])?;
+            for _ in 0..30 {
+                if child.try_wait()?.is_some() { break; }
+                if run(&["hostapd_cli","-p",control.to_str().unwrap(),"-i",AP,"status"]).is_ok_and(|s| s.lines().any(|l| l=="state=ENABLED")) {
+                    eprintln!("AP enabled with requested {width} MHz configuration");
+                    return Ok(child);
+                }
+                thread::sleep(Duration::from_millis(200));
+            }
+            stop_child(&mut child);
+            eprintln!("AP {width} MHz attempt {attempt} failed");
         }
-        stop_child(&mut child);
-        let _ = run(&["ip","link","set",AP,"down"]);
-        run(&["iw","dev",AP,"set","type","__ap"])?;
     }
     Err(err("AP failed on this channel; use Existing Wi-Fi"))
 }
@@ -218,6 +258,10 @@ fn cleanup(c: &Config) -> Result<()> {
         let _ = run(&["ip","link","set",AP,"down"]);
         run(&["iw","dev",AP,"del"])?;
     }
+    // Record the teardown even if the kernel removed our AP before cleanup.
+    if path("owned-ap").exists() {
+        write(&path("last-ap-stop-ms"), &boot_millis()?.to_string(), 0o600)?;
+    }
     if path("wifi-forward").exists() {
         if fs::read_to_string("/proc/sys/net/ipv4/ip_forward")?.trim()=="0" && sysctl(&c.wifi,"forwarding").exists() {
             set_forward(&c.wifi,"0\n")?;
@@ -232,6 +276,7 @@ fn start(c: &Config, shared: bool) -> Result<()> {
     if ap_exists() { return Err(err("Manual AP exists; reboot before first use")); }
     guard_ok(false, None)?;
     if !local_session()? { return Err(err("No local desktop session")); }
+    wait_ap_cooldown()?;
     check_routes(c)?;
     let ch = channel(c)?;
     let secret = password()?;
@@ -347,6 +392,13 @@ mod tests {
     #[test] fn channel6() {
         let ch = parse_channel("channel 6 (2437 MHz), width: 20 MHz, center1: 2437 MHz").unwrap();
         assert_eq!(variants(ch).unwrap(),vec![String::new()]);
+    }
+    #[test] fn cooldown() {
+        assert_eq!(cooldown_remaining(10_000, 10_000), Duration::from_secs(5));
+        assert_eq!(cooldown_remaining(12_000, 10_000), Duration::from_secs(3));
+        assert_eq!(cooldown_remaining(15_000, 10_000), Duration::ZERO);
+        assert_eq!(cooldown_remaining(20_000, 10_000), Duration::ZERO);
+        assert_eq!(cooldown_remaining(9_000, 10_000), Duration::from_secs(5));
     }
     #[test] fn routes() {
         let host = "10.42.0.1".parse().unwrap();

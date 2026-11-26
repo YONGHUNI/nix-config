@@ -20,7 +20,10 @@ Use the tray QR dialog and iPad Camera to join Gram-Display. Moonlight host:
 /var/lib/ipad-hotspot (root-only); the runtime QR payload is readable by
 wheel members only. Do not share the QR screenshot. DHCP leases 10.42.0.2
 to a single client. Sunshine credentials and existing paired clients remain
-unchanged.
+unchanged. The Desktop application is declared in Nix, so the app list is
+managed by the system configuration rather than the Sunshine web UI. The
+pinned Sunshine 2026.914.233613 receives upstream PR #5737 (duplicate
+certificate repair); certificate verification remains enabled.
 
 ## First migration
 
@@ -37,6 +40,10 @@ The systemd services are on-demand, not enabled at boot; active local wheel
 users may start/stop only these three units without an authentication prompt.
 NetworkManager does not manage ipad-ap. The service detects the current
 STA channel and tries 80/40/20 MHz as appropriate, with 20 MHz on 2.4 GHz.
+A successful AP teardown records boot-relative time in /run/ipad-hotspot;
+a subsequent AP start waits only for the remainder of a five-second
+cooldown. Each eligible width has up to three attempts separated by
+two seconds before falling back. No periodic AP restart is performed.
 Regulatory and driver restrictions are respected; no country override.
 If the upstream channel changes, a conflicting route appears, a child fails,
 or the isolation table disappears, the AP is stopped; manually restart the
@@ -70,10 +77,11 @@ non-overlapping routes should remain compatible.
    from iPad, and rejected VPN destination access from iPad.
 5. Stop and inspect that ipad-ap is absent;
    verify original Wi-Fi forwarding and VPN routes are unchanged. The guard table remains installed with empty shared, owned_forward and legacy sets.
-6. Test direct mode, suspend/resume, Wi-Fi channel change, firewall reload,
+6. Test rapid stop/start and verify the cooldown/width in the journal.
+7. Test direct mode, suspend/resume, Wi-Fi channel change, firewall reload,
    and startup failure. Full-tunnel/VPN router compatibility is not tested.
 
 System logs: `journalctl -u ipad-hotspot-wifi -u ipad-hotspot-direct -u ipad-hotspot-shared -b`.
 User logs: `ipad-display logs`. Blue tray icon means services ready; green means a Wi-Fi station is authorized, not that Moonlight video or Internet connectivity has been verified. Amber indicates a transition, partial startup, failure or paused route.
 
-Rust backend has no external crates. Nix builds and runs unit tests for channel parsing, width selection and route overlap. The full system still requires an on-device build and runtime validation. Host settings are declared in services.ipad-display; no secrets are stored in Nix or Git.
+Rust backend has no external crates. Nix builds and runs unit tests for channel parsing, width selection, restart cooldown and route overlap. The full system still requires an on-device build and runtime validation. Host settings are declared in services.ipad-display; no secrets are stored in Nix or Git.

@@ -291,7 +291,8 @@ in
         UMask = "0077";
         StateDirectory = "ipad-hotspot";
         StateDirectoryMode = "0700";
-        TimeoutStartSec = 60;
+        # Bounded retries at each channel width plus the restart cooldown.
+        TimeoutStartSec = 120;
         TimeoutStopSec = 30;
         KillMode = "control-group";
       };
@@ -306,6 +307,20 @@ in
 
   services.sunshine = {
     enable = true;
+    # Backport upstream PR #5737 only for the affected pinned release.
+    package = pkgs.sunshine.overrideAttrs (old: {
+      patches = (old.patches or []) ++ lib.optionals
+        (old.version == "2026.914.233613")
+        [ ../../pkgs/ipad-display/sunshine-pairing-5737.patch ];
+    });
+    # This host is an extended display, not an application launcher.
+    applications.apps = [
+      {
+        name = "Desktop";
+        cmd = "";
+        image-path = "desktop.png";
+      }
+    ];
     autoStart = false;
     capSysAdmin = false;
     openFirewall = false;

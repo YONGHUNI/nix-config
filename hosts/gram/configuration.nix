@@ -17,7 +17,7 @@
   services.ipad-display = {
     enable = true;
     resolution = "2732x2048";
-    scale = "1.5";
+    scale = null; # Let KDE remember the user-selected display scale.
     upstreamInterface = "wlp0s20f3";
     ssid = "Gram-Display";
     prefix = "10.42.0";

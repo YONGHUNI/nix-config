@@ -1,6 +1,12 @@
 # iPad wireless display (Gram)
 
-KDE Wayland + Krfb + Sunshine + Moonlight. Native 2732x2048, scale 150%.
+KDE Wayland + Krfb + Sunshine + Moonlight. Native 2732x2048.
+By default, display scaling is left to KDE (`services.ipad-display.scale = null`).
+Change the scale in Plasma Display Configuration; persistence across virtual
+monitor recreation depends on KWin restoring the saved output configuration.
+Set an explicit scale such as `"2.25"` to force 225% on each start instead.
+The virtual monitor's initial resolution and extended-display mode remain
+managed by Nix; this does not add any refresh-rate modes.
 The tablet tray icon remains available in Plasma; left-click toggles the
 display, right-click selects the mode for the next start and shows status,
 upstream Wi-Fi, hotspot channel, copy host IP and local Sunshine settings.
@@ -78,7 +84,9 @@ non-overlapping routes should remain compatible.
 5. Stop and inspect that ipad-ap is absent;
    verify original Wi-Fi forwarding and VPN routes are unchanged. The guard table remains installed with empty shared, owned_forward and legacy sets.
 6. Test rapid stop/start and verify the cooldown/width in the journal.
-7. Test direct mode, suspend/resume, Wi-Fi channel change, firewall reload,
+7. Change scale in Plasma Display Configuration, stop and start the display,
+   and verify the saved scale with `kscreen-doctor -o`.
+8. Test direct mode, suspend/resume, Wi-Fi channel change, firewall reload,
    and startup failure. Full-tunnel/VPN router compatibility is not tested.
 
 System logs: `journalctl -u ipad-hotspot-wifi -u ipad-hotspot-direct -u ipad-hotspot-shared -b`.

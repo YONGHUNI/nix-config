@@ -5,6 +5,12 @@
 #include <QColor>
 #include <QDesktopServices>
 #include <QIcon>
+#include <QDialog>
+#include <QLabel>
+#include <QVBoxLayout>
+#include <QDialogButtonBox>
+#include <QSettings>
+#include <QActionGroup>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMenu>
@@ -56,12 +62,38 @@ int main(int argc, char **argv)
         action->setEnabled(false);
     menu->addSeparator();
     auto *toggle = menu->addAction("Toggle iPad display");
-    auto *copy = menu->addAction("Copy Wi-Fi IP");
+    auto *modeMenu = menu->addMenu("Connection mode (next start)");
+    auto *modes = new QActionGroup(modeMenu);
+    modes->setExclusive(true);
+    QSettings settings("ipad-display", "tray");
+    QString mode = settings.value("mode", "wifi").toString();
+    if (mode != "wifi" && mode != "direct" && mode != "shared")
+        mode = "wifi";
+    for (const auto &entry : { qMakePair(QString("Existing Wi-Fi"), QString("wifi")),
+                                qMakePair(QString("Dedicated Hotspot"), QString("direct")),
+                                qMakePair(QString("Hotspot + Internet"), QString("shared")) }) {
+        auto *action = modeMenu->addAction(entry.first);
+        action->setCheckable(true);
+        modes->addAction(action);
+        action->setChecked(mode == entry.second);
+        QObject::connect(action, &QAction::triggered, &app, [&, selected = entry.second] {
+            mode = selected;
+            settings.setValue("mode", mode);
+        });
+    }
+    auto *apLabel = menu->addAction("Hotspot: off");
+    auto *channelLabel = menu->addAction("Channel: unavailable");
+    auto *internetLabel = menu->addAction("Internet sharing: off");
+    for (auto *action : {apLabel, channelLabel, internetLabel})
+        action->setEnabled(false);
+    auto *qr = menu->addAction("Show hotspot Wi-Fi QR code");
+    auto *copy = menu->addAction("Copy Moonlight host IP");
     auto *web = menu->addAction("Open Sunshine settings");
     tray.setContextMenu(menu);
 
     QProcess poll, command;
-    QString ssid, ip, server, monitor;
+    QString ssid, ip, server, monitor, apIp, apSsid, apChannel, apInternet;
+    QProcess qrProcess;
     bool busy = false, valid = false;
     auto render = [&] {
         const bool running = server == "active" && monitor == "active";
@@ -80,7 +112,8 @@ int main(int argc, char **argv)
         const QString address = ip.isEmpty() ? "Unavailable" : ip;
         tray.setToolTip(icon, "iPad Display",
                         status.toHtmlEscaped() + "<br>Wi-Fi: " + network.toHtmlEscaped() +
-                        "<br>IPv4: " + address.toHtmlEscaped());
+                        "<br>IPv4: " + address.toHtmlEscaped() +
+                        (apIp.isEmpty() ? QString() : "<br>Hotspot: " + apIp.toHtmlEscaped()));
         state->setText(status);
         // Ampersands are menu mnemonics; preserve literal SSID text.
         QString menuNetwork = network;
@@ -88,7 +121,12 @@ int main(int argc, char **argv)
         ipLabel->setText("IPv4: " + address);
         toggle->setText(running || partial ? "Stop iPad display" : "Start iPad display");
         toggle->setEnabled(valid && !busy && !transition);
-        copy->setEnabled(valid && !ip.isEmpty());
+        apLabel->setText(apIp.isEmpty() ? "Hotspot: off" : "Hotspot: " + apSsid + " (" + apIp + ")");
+        channelLabel->setText(apChannel.isEmpty() ? "Channel: unavailable" : apChannel);
+        internetLabel->setText("Internet sharing: " + (apInternet.isEmpty() ? QString("off") : apInternet));
+        qr->setEnabled(valid && !busy && !apIp.isEmpty() && qrProcess.state() == QProcess::NotRunning);
+        modeMenu->setEnabled(valid && !busy && !running && !partial && !transition && apIp.isEmpty());
+        copy->setEnabled(valid && (!apIp.isEmpty() || !ip.isEmpty()));
         web->setEnabled(running);
     };
 
@@ -105,6 +143,11 @@ int main(int argc, char **argv)
             ip = object.value("ipv4").toString();
             server = object.value("sunshine").toString();
             monitor = object.value("monitor").toString();
+            const auto hotspot = object.value("hotspot").toObject();
+            apIp = hotspot.value("ip").toString();
+            apSsid = hotspot.value("ssid").toString();
+            apChannel = hotspot.value("channel").toString();
+            apInternet = hotspot.value("internet").toString();
         }
         render();
     });
@@ -118,13 +161,48 @@ int main(int argc, char **argv)
             return;
         busy = true;
         render();
-        command.start(QStringLiteral(IPAD_DISPLAY_CLI), {"toggle"});
+        command.start(QStringLiteral(IPAD_DISPLAY_CLI), {"toggle", mode});
     };
     QObject::connect(toggle, &QAction::triggered, &app, flip);
     QObject::connect(&tray, &KStatusNotifierItem::activateRequested, &app,
                      [&](bool, const QPoint &) { flip(); });
     QObject::connect(copy, &QAction::triggered, &app, [&] {
-        QApplication::clipboard()->setText(ip);
+        QApplication::clipboard()->setText(apIp.isEmpty() ? ip : apIp);
+    });
+    QObject::connect(qr, &QAction::triggered, &app, [&] {
+        if (qrProcess.state() == QProcess::NotRunning) {
+            qrProcess.start(QStringLiteral(IPAD_DISPLAY_CLI), {"qr"});
+            qr->setEnabled(false);
+        }
+    });
+    QObject::connect(&qrProcess, &QProcess::finished, &app, [&](int code, QProcess::ExitStatus status) {
+        QPixmap image;
+        if (code == 0 && status == QProcess::NormalExit &&
+            image.loadFromData(qrProcess.readAllStandardOutput(), "PNG")) {
+            auto *dialog = new QDialog;
+            dialog->setAttribute(Qt::WA_DeleteOnClose);
+            dialog->setWindowTitle("Join Gram-Display");
+            auto *layout = new QVBoxLayout(dialog);
+            auto *hint = new QLabel("Scan with the iPad Camera, then tap Join Network.\nMoonlight host: 10.42.0.1");
+            hint->setTextFormat(Qt::PlainText);
+            layout->addWidget(hint);
+            auto *picture = new QLabel;
+            picture->setPixmap(image);
+            picture->setAlignment(Qt::AlignCenter);
+            layout->addWidget(picture);
+            auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+            layout->addWidget(buttons);
+            QObject::connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::close);
+            dialog->show();
+            dialog->raise();
+            dialog->activateWindow();
+        } else {
+            tray.showMessage("iPad Display", "Wi-Fi QR code unavailable.", "dialog-error");
+        }
+        render();
+    });
+    QObject::connect(&qrProcess, &QProcess::errorOccurred, &app, [&](QProcess::ProcessError) {
+        render();
     });
     QObject::connect(web, &QAction::triggered, &app, [] {
         QDesktopServices::openUrl(QUrl("https://localhost:47990"));

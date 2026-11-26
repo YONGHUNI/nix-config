@@ -68,7 +68,7 @@ int main(int argc, char **argv)
     QString mode = settings.value("mode", QStringLiteral(IPAD_DEFAULT_MODE)).toString();
     if (mode != "wifi" && mode != "direct" && mode != "shared")
         mode = QStringLiteral(IPAD_DEFAULT_MODE);
-    for (const auto &entry : { qMakePair(QString("Existing Wi-Fi"), QString("wifi")),
+    for (const auto &entry : { qMakePair(QString("Existing Wi-Fi (fallback)"), QString("wifi")),
                                 qMakePair(QString("Dedicated Hotspot"), QString("direct")),
                                 qMakePair(QString("Hotspot + Internet"), QString("shared")) }) {
         auto *action = modeMenu->addAction(entry.first);
@@ -96,21 +96,22 @@ int main(int argc, char **argv)
     tray.setContextMenu(menu);
 
     QProcess poll, command;
-    QString ssid, ip, server, monitor, apIp, apSsid, apChannel, apInternet, direct, shared, requested;
+    QString ssid, ip, server, monitor, apIp, apSsid, apChannel, apInternet, wifi, direct, shared, requested;
     int stations = 0;
     QProcess qrProcess;
     bool busy = false, valid = false;
     auto render = [&] {
         const bool displayRunning = server == "active" && monitor == "active";
         const bool apRunning = (direct == "active" || shared == "active") && !apIp.isEmpty();
-        const bool running = displayRunning && (requested == "wifi" || apRunning);
+        const bool legacyRunning = wifi == "active";
+        const bool running = displayRunning && (requested == "wifi" ? legacyRunning : apRunning);
         const bool transition = server == "activating" || monitor == "activating" ||
-                                server == "deactivating" || monitor == "deactivating" || direct == "activating" || shared == "activating" || direct == "deactivating" || shared == "deactivating";
-        const bool partial = ((server == "active") != (monitor == "active")) || (displayRunning && !running) || (apRunning && !displayRunning);
-        const bool failed = server == "failed" || monitor == "failed" || direct == "failed" || shared == "failed";
+                                server == "deactivating" || monitor == "deactivating" || wifi == "activating" || wifi == "deactivating" || direct == "activating" || shared == "activating" || direct == "deactivating" || shared == "deactivating";
+        const bool partial = ((server == "active") != (monitor == "active")) || (displayRunning && !running) || ((apRunning || legacyRunning) && !displayRunning);
+        const bool failed = server == "failed" || monitor == "failed" || wifi == "failed" || direct == "failed" || shared == "failed";
         QString status = !valid ? "Status unavailable" :
                          busy || transition ? "Changing state..." :
-                         running ? (apRunning && stations > 0 ? "iPad Wi-Fi connected" : "Display ready") :
+                         running ? (apRunning ? (stations > 0 ? "iPad Wi-Fi connected" : "Waiting for iPad on " + apSsid) : "Existing Wi-Fi (fallback)") :
                          partial || failed ? "Check services" : "Off";
         const QIcon icon = tabletIcon(busy || transition || partial || failed || (apRunning && apInternet == "paused") ? QColor("#d97706") :
                                      running ? QColor(apRunning && stations > 0 ? "#22c55e" : "#3b82f6") : QColor("#9ca3af"));
@@ -124,7 +125,7 @@ int main(int argc, char **argv)
         QString menuNetwork = network;
         ssidLabel->setText("Wi-Fi: " + menuNetwork.replace("&", "&&"));
         ipLabel->setText("IPv4: " + address);
-        toggle->setText(displayRunning || apRunning || partial ? "Stop iPad display" : "Start iPad display");
+        toggle->setText(displayRunning || apRunning || legacyRunning || partial ? "Stop iPad display" : "Start iPad display");
         toggle->setEnabled(valid && !busy && !transition);
         apLabel->setText(apRunning ? apSsid + " · " + apIp : "Moonlight host: " + address);
         apLabel->setVisible(apRunning || (running && requested == "wifi"));
@@ -134,8 +135,8 @@ int main(int argc, char **argv)
         channelLabel->setText(apChannel.isEmpty() ? "Channel: unavailable" : apChannel);
         internetLabel->setText("Internet sharing: " + (apInternet == "route-available" ? QString("Enabled (route available)") : apInternet == "paused" ? QString("Paused by routing") : QString("Off")));
         qr->setEnabled(valid && !busy && !apIp.isEmpty() && qrProcess.state() == QProcess::NotRunning);
-        modeMenu->setEnabled(valid && !busy && !displayRunning && !apRunning && !partial && !transition);
-        copy->setEnabled(valid && running && (!apIp.isEmpty() || !ip.isEmpty()));
+        modeMenu->setEnabled(valid && !busy && !displayRunning && !apRunning && !legacyRunning && !partial && !transition);
+        copy->setEnabled(valid && running && (requested == "wifi" ? !ip.isEmpty() : !apIp.isEmpty()));
         web->setEnabled(running);
     };
 
@@ -158,6 +159,7 @@ int main(int argc, char **argv)
             apChannel = hotspot.value("channel").toString();
             apInternet = hotspot.value("internet").toString();
             stations = hotspot.value("stations").toInt();
+            wifi = object.value("wifi").toString();
             direct = object.value("direct").toString();
             shared = object.value("shared").toString();
             requested = object.value("requested").toString();
@@ -180,7 +182,7 @@ int main(int argc, char **argv)
     QObject::connect(&tray, &KStatusNotifierItem::activateRequested, &app,
                      [&](bool, const QPoint &) { flip(); });
     QObject::connect(copy, &QAction::triggered, &app, [&] {
-        QApplication::clipboard()->setText(apIp.isEmpty() ? ip : apIp);
+        QApplication::clipboard()->setText(requested == "wifi" ? ip : apIp);
     });
     QObject::connect(qr, &QAction::triggered, &app, [&] {
         if (qrProcess.state() == QProcess::NotRunning) {
@@ -196,7 +198,7 @@ int main(int argc, char **argv)
             dialog->setAttribute(Qt::WA_DeleteOnClose);
             dialog->setWindowTitle("Join " + apSsid);
             auto *layout = new QVBoxLayout(dialog);
-            auto *hint = new QLabel("Scan with the iPad Camera, then tap Join Network.\nMoonlight host: " + apIp);
+            auto *hint = new QLabel("Scan with the iPad Camera, then tap Join Network.\nSelect this Wi-Fi on iPad before opening Moonlight.\nMoonlight host: " + apIp);
             hint->setTextFormat(Qt::PlainText);
             layout->addWidget(hint);
             auto *picture = new QLabel;

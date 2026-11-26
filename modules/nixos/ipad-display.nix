@@ -162,6 +162,20 @@ let
   tray = pkgs.kdePackages.callPackage ../../pkgs/ipad-display { inherit ipadDisplay; inherit (cfg) defaultMode; };
 in
 {
+  # Nixpkgs 0dc498b's wpa_supplicant module queues a global restart on
+  # every WLAN add/remove, even when NetworkManager controls it over D-Bus.
+  # Extend the merged udev option with a narrow predicate on that rule.
+  # RUN-= is not supported by systemd; do not reset unrelated RUN actions.
+  options.services.udev.extraRules = lib.mkOption {
+    apply = rules:
+      if cfg.enable then
+        builtins.replaceStrings
+          [ ''RUN+="/run/current-system/systemd/bin/systemctl try-restart wpa_supplicant.service"'' ]
+          [ ''KERNEL!="ipad-ap", RUN+="/run/current-system/systemd/bin/systemctl try-restart wpa_supplicant.service"'' ]
+          rules
+      else rules;
+  };
+
   options.services.ipad-display = {
     enable = lib.mkEnableOption "Gram wireless iPad display";
     resolution = lib.mkOption { type = lib.types.strMatching "[0-9]+x[0-9]+"; default = "2732x2048"; };
@@ -175,13 +189,7 @@ in
   # The AP is explicitly unmanaged; the upstream connection stays under NM.
   networking.networkmanager.unmanaged = [ "interface-name:ipad-ap" ];
 
-  # Nixpkgs' wpa_supplicant module queues a global supplicant restart
-  # on WLAN add/remove. The dedicated AP is owned by hostapd, not by
-  # wpa_supplicant. Remove only that queued action for this interface.
-  # Keep other udev actions and physical WLAN hotplug behavior intact.
-  services.udev.extraRules = lib.mkAfter ''
-    ACTION=="add|remove", SUBSYSTEM=="net", KERNEL=="ipad-ap", RUN-="/run/current-system/systemd/bin/systemctl try-restart wpa_supplicant.service"
-  '';
+
   networking.firewall.interfaces."ipad-ap" = {
     allowedTCPPorts = [ 47984 47989 48010 ];
     allowedUDPPorts = [ 67 47998 47999 48000 48002 48010 ];

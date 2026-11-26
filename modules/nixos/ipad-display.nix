@@ -174,6 +174,14 @@ in
   config = lib.mkIf cfg.enable {
   # The AP is explicitly unmanaged; the upstream connection stays under NM.
   networking.networkmanager.unmanaged = [ "interface-name:ipad-ap" ];
+
+  # Nixpkgs' wpa_supplicant module queues a global supplicant restart
+  # on WLAN add/remove. The dedicated AP is owned by hostapd, not by
+  # wpa_supplicant. Remove only that queued action for this interface.
+  # Keep other udev actions and physical WLAN hotplug behavior intact.
+  services.udev.extraRules = lib.mkAfter ''
+    ACTION=="add|remove", SUBSYSTEM=="net", KERNEL=="ipad-ap", RUN-="/run/current-system/systemd/bin/systemctl try-restart wpa_supplicant.service"
+  '';
   networking.firewall.interfaces."ipad-ap" = {
     allowedTCPPorts = [ 47984 47989 48010 ];
     allowedUDPPorts = [ 67 47998 47999 48000 48002 48010 ];

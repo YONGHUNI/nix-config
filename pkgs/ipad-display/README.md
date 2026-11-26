@@ -8,9 +8,9 @@ If hidden, set iPad Display to Always Shown in Plasma's System Tray settings.
 
 ## Modes
 
-- Existing Wi-Fi (default): existing streaming behavior, no AP.
+- Existing Wi-Fi: existing streaming behavior, no AP.
 - Dedicated Hotspot: local AP + DHCP, no default gateway or Internet sharing.
-- Hotspot + Internet: same AP + DHCP + narrowly scoped IPv4 forwarding/NAT.
+- Hotspot + Internet (default): same AP + DHCP + narrowly scoped IPv4 forwarding/NAT.
   A physical Wi-Fi connection is required in both AP modes.
 
 CLI: `ipad-display start|restart|toggle [wifi|direct|shared]`,
@@ -43,7 +43,7 @@ or the isolation table disappears, the AP is stopped; manually restart the
 display to reselect the channel or choose Existing Wi-Fi. Suspend/logout
 also stop the AP. No automatic roaming/reconnect is promised.
 
-A dedicated inet nftables table adds restrictive input and forward hooks
+A declarative, persistent inet nftables guard defaults to denying AP forwarding and adds restrictive input and forward hooks
 alongside the existing NixOS iptables firewall (no global backend change).
 A later VPN drop still takes precedence. IPv6 is disabled on the AP only.
 Private destinations and all non-physical-Wi-Fi forwarding are dropped.
@@ -54,8 +54,7 @@ Shared mode enables per-interface forwarding, not global forwarding.
 If it enables Wi-Fi forwarding itself, it also blocks unrelated forwarding
 arriving on that Wi-Fi to avoid opening a new router path. This may affect
 future subnet-router use while the AP is running. Test those services
-separately. The service does not guarantee isolation if privileged external
-software flushes all firewall tables or modifies forwarding policies.
+separately. The Rust supervisor listens to ip/iw/nft/logind event streams with a 30-second watchdog. The tray watches runtime status changes and refreshes on menu open and every 60 seconds. Neither is a packet-processing process. The service does not guarantee isolation if privileged external software flushes all firewall tables or modifies forwarding policies.
 A full-tunnel VPN or kill switch may block Internet sharing or local
 streaming. The status label reports a representative route, not Internet
 reachability or a comprehensive VPN-policy check. Split-tunnel VPNs with
@@ -69,11 +68,12 @@ non-overlapping routes should remain compatible.
    `ip -4 route show table all`, `iw dev` (use nix shell for iw).
 4. Connect UGA/homewg, test SSH to Sapelo/GPU from Gram, public Internet
    from iPad, and rejected VPN destination access from iPad.
-5. Stop and inspect that ipad-ap and inet ipad_display are absent;
-   verify original Wi-Fi forwarding and VPN routes are unchanged.
+5. Stop and inspect that ipad-ap is absent;
+   verify original Wi-Fi forwarding and VPN routes are unchanged. The guard table remains installed with empty sharing sets.
 6. Test direct mode, suspend/resume, Wi-Fi channel change, firewall reload,
    and startup failure. Full-tunnel/VPN router compatibility is not tested.
 
 System logs: `journalctl -u ipad-hotspot-direct -u ipad-hotspot-shared -b`.
-User logs: `ipad-display logs`. Green tray icon means streaming services
-are active, not that video or Internet connectivity has been verified.
+User logs: `ipad-display logs`. Blue tray icon means services ready; green means a Wi-Fi station is authorized, not that Moonlight video or Internet connectivity has been verified. Amber indicates a transition, partial startup, failure or paused route.
+
+Rust backend has no external crates. Nix builds and runs unit tests for channel parsing, width selection and route overlap. The full system still requires an on-device build and runtime validation. Host settings are declared in services.ipad-display; no secrets are stored in Nix or Git.
